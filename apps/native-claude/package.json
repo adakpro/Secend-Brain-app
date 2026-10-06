@@ -1,0 +1,10 @@
+{
+  "name": "@sb/native-claude",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional isolated service that runs the OFFICIAL, unmodified Claude Code binary in a private PTY for the owner's own interactive use.",
+  "main": "src/main.mjs",
+  "scripts": { "start": "node src/main.mjs" },
+  "dependencies": { "node-pty": "1.1.0", "ws": "8.22.0" }
+}

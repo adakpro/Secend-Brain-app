@@ -1,0 +1,7 @@
+[{"id":"g1","title":"Branchy chat","current_node":"n4","mapping":{
+ "root":{"message":null,"parent":null,"children":["n1"]},
+ "n1":{"message":{"author":{"role":"user"},"content":{"parts":["Q1"]},"create_time":1700000001},"parent":"root","children":["n2","n2b"]},
+ "n2":{"message":{"author":{"role":"assistant"},"content":{"parts":["A1 old branch"]},"create_time":1700000002},"parent":"n1","children":[]},
+ "n2b":{"message":{"author":{"role":"assistant"},"content":{"parts":["A1 edited branch"]},"create_time":1700000003},"parent":"n1","children":["n3"]},
+ "n3":{"message":{"author":{"role":"user"},"content":{"parts":["Q2"]},"create_time":1700000004},"parent":"n2b","children":["n4"]},
+ "n4":{"message":{"author":{"role":"assistant"},"content":{"parts":["A2"]},"create_time":1700000005},"parent":"n3","children":[]}}}]

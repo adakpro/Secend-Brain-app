@@ -1,0 +1,20 @@
+== secrets mounted in agent-runner
+total 12
+drwxr-xr-x 2 root root 4096 Oct  6 13:53 .
+drwxr-xr-x 1 root root 4096 Oct  6 13:53 ..
+-r--r--r-- 1 root root   65 Oct  6 12:33 internal_token
+== env var names matching key/token/pass/database
+INTERNAL_TOKEN_FILE
+== /data and docker.sock
+/data EXISTS
+/var/run/docker.sock absent
+/data/vault EXISTS
+== uid and read-only root fs
+uid=1000(node) gid=1000(node) groups=1000(node)
+read-only: EROFS
+== fetch https://api.anthropic.com/v1/models -> blocked: EAI_AGAIN
+== fetch http://postgres:5432 -> blocked: EAI_AGAIN
+== fetch http://api:3000/health/ready -> blocked: EAI_AGAIN
+== fetch http://1.1.1.1 -> blocked: ENETUNREACH
+== fetch http://worker:8790/health -> REACHABLE 200
+[["backups",0],["sources",0],["staging",0],["vault",0]]

@@ -1,0 +1,16 @@
+packages:
+  - "apps/api"
+  - "apps/worker"
+  - "apps/agent-runner"
+  - "apps/web"
+  - "packages/*"
+# apps/native-claude is an isolated optional service with its own lockfile
+# (built only inside its Docker image, where the PTY native addon is compiled).
+onlyBuiltDependencies:
+  - "@node-rs/argon2"
+  - esbuild
+# Install only the native optional dependencies for the platform we build/run on (glibc images).
+supportedArchitectures:
+  os: [current]
+  cpu: [current]
+  libc: [glibc]

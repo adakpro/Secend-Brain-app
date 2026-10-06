@@ -1,0 +1,4 @@
+[{"uuid":"c1","name":"گفتگو دربارهٔ ویکی","chat_messages":[
+ {"sender":"assistant","text":"پاسخ دوم","created_at":"2026-01-01T10:00:02Z"},
+ {"sender":"human","text":"سؤال اول","created_at":"2026-01-01T10:00:01Z"},
+ {"sender":"human","content":[{"type":"text","text":"سؤال سوم"}],"created_at":"2026-01-01T10:00:03Z"}]}]

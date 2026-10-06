@@ -1,0 +1,26 @@
+{
+ "pages": 1000,
+ "chunks": 3014,
+ "indexMs": 217597,
+ "reconcileMs": 11545,
+ "reconcile": {
+  "imported": 0,
+  "updated": 0
+ },
+ "searchMs": {
+  "p50": 324,
+  "p95": 977,
+  "max": 1181
+ },
+ "queries": 40,
+ "avgHits": 20,
+ "dbSize": "19 MB",
+ "machine": {
+  "cpus": 8,
+  "cpuModel": "Intel(R) Xeon(R) CPU E3-1275 v6 @ 3.80GHz",
+  "memGiB": 31,
+  "node": "v22.23.3",
+  "platform": "linux 5.15.0-194-generic"
+ },
+ "postgres": "17.6 (docker, tmpfs data dir)"
+}

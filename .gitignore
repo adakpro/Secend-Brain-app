@@ -1,0 +1,16 @@
+node_modules/
+dist/
+secrets/*
+!secrets/README.md
+.env
+*.log
+test-results/
+playwright-report/
+evidence/tmp/
+backups/
+.data/
+
+# Screenshots of the real owner instance contain personal data
+evidence/screens/main/
+# Playwright traces/artifacts (large, may contain session data)
+evidence/e2e/artifacts/

@@ -1,0 +1,4 @@
+== A01 compose config has no secret values
+ok: db_password value not in config output
+ok: master_key value not in config output
+ok: internal_token value not in config output

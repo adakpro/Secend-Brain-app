@@ -1,0 +1,6 @@
+== A07 published ports (prod stack)
+agent-runner -> 
+api -> 3000/tcp
+postgres -> 5432/tcp
+web -> 127.0.0.1:8080->8080/tcp
+worker -> 

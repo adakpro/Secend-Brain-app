@@ -1,0 +1,3 @@
+d6861ccde4c483afa8c4805373ee447f1e87b33c
+Tue Sep 29 11:30:38 2026 -0400
+State the course/handbook contract and split the duplicated ground

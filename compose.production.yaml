@@ -1,0 +1,28 @@
+# Production overlay: HTTPS via Caddy (automatic Let's Encrypt). Only Caddy publishes ports.
+#   SB_PRODUCTION=1 ./scripts/bootstrap.sh   (or: docker compose -f compose.yaml -f compose.production.yaml up -d)
+# For a local HTTPS test without a public domain set DOMAIN=localhost and TLS_ISSUER=internal.
+services:
+  web:
+    ports: !reset []
+  api:
+    environment:
+      APP_ORIGIN: https://${DOMAIN:?set DOMAIN in .env}${HTTPS_PORT_SUFFIX:-}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: uniquelocal
+  caddy:
+    image: caddy:2.10.2-alpine
+    ports: ["${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:443", "${HTTPS_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"]
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      TLS_ISSUER: ${TLS_ISSUER:-acme}
+    volumes: ["./infra/docker/Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config"]
+    networks: [edge]
+    depends_on: { web: { condition: service_healthy } }
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+volumes:
+  caddy-data: {}
+  caddy-config: {}

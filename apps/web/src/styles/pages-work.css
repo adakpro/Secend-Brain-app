@@ -1,0 +1,15 @@
+/* Project / studio / activity / settings page layout helpers (reference tokens only). */
+.pw-sections{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.pw-section .card-body{padding-bottom:14px}
+.pw-section .task-row{font-size:11px}
+.pw-studio-list{display:grid;gap:8px}
+.pw-version{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line2);font-size:11px}.pw-version:last-child{border-bottom:0}
+.pw-version.current{font-weight:600}
+.pw-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:12px 0}
+.pw-codes code{background:var(--line2);border-radius:6px;padding:4px 8px;text-align:center}
+.pw-secret{background:var(--line2);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere;user-select:all}
+.pw-conn{display:flex;gap:14px;align-items:flex-start;padding:16px;text-decoration:none;color:inherit}
+.pw-conn:hover{border-color:#bfd0ee}
+.pw-json{max-width:360px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted-dark)}
+@media(max-width:1190px){.pw-sections{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:730px){.pw-sections{grid-template-columns:1fr}.pw-codes{grid-template-columns:1fr}}

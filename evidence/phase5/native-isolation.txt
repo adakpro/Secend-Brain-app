@@ -1,0 +1,19 @@
+== claude binary version (official npm package, unmodified)
+2.1.291 (Claude Code)
+== npm package integrity recorded at install
+@anthropic-ai/claude-code 2.1.291
+== secrets in native container
+no /run/secrets
+== product data / docker socket visible?
+/data absent
+/data/vault absent
+/var/run/docker.sock absent
+/run/secrets/master_key absent
+== env names with key/token/pass
+none
+== fetch http://postgres:5432 -> blocked: EAI_AGAIN
+== fetch http://agent-runner:8791/health -> blocked: EAI_AGAIN
+== fetch http://worker:8790/health -> blocked: EAI_AGAIN
+== fetch http://api:3000/health/ready -> REACHABLE 200
+== real 'claude auth status' via service (no login yet)
+{"loggedIn":false,"authMethod":"none","email":null,"orgName":null,"statusExitCode":1,"version":"2.1.291","activeSessions":0}

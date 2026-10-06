@@ -1,0 +1,8 @@
+# Test/CI overlay: same images, test profile, deterministic MOCK provider (never a real model),
+# separate project name => separate volumes. Use:
+#   docker compose -p secondbrain-test -f compose.yaml -f compose.test.yaml up -d
+services:
+  migrate: { environment: { APP_PROFILE: test, MODEL_PROVIDER_MODE: mock, APP_ORIGIN: "http://127.0.0.1:8081" } }
+  api: { environment: { APP_PROFILE: test, MODEL_PROVIDER_MODE: mock, APP_ORIGIN: "http://127.0.0.1:8081" } }
+  worker: { environment: { APP_PROFILE: test, MODEL_PROVIDER_MODE: mock, APP_ORIGIN: "http://127.0.0.1:8081" } }
+  web: { ports: !override ["127.0.0.1:8081:8080"] }

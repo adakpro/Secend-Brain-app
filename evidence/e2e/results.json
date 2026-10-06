@@ -1,0 +1,500 @@
+{
+  "config": {
+    "argv": [
+      "/root/.nvm/versions/node/v22.23.3/bin/node",
+      "/app/david/brain/second-brain-app/node_modules/@playwright/test/cli.js",
+      "test"
+    ],
+    "configFile": "/app/david/brain/second-brain-app/playwright.config.ts",
+    "rootDir": "/app/david/brain/second-brain-app/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/app/david/brain/second-brain-app/evidence/e2e/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop",
+        "name": "desktop",
+        "testDir": "/app/david/brain/second-brain-app/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts/"
+        ],
+        "timeout": 600000
+      },
+      {
+        "outputDir": "/app/david/brain/second-brain-app/evidence/e2e/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile",
+        "name": "mobile",
+        "testDir": "/app/david/brain/second-brain-app/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts/"
+        ],
+        "timeout": 600000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "evidence/e2e/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "core-flow.spec.ts",
+      "file": "core-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "core flow: source → proposal → review → apply → cited answer",
+          "file": "core-flow.spec.ts",
+          "line": 15,
+          "column": 15,
+          "specs": [
+            {
+              "title": "rejects a wrong password with a neutral message",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 23070,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:40:28.115Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "line": 15,
+                            "column": 15
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-df76cb19eb263ddbe2c6",
+              "file": "core-flow.spec.ts",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "ingests a Persian source and applies the reviewed proposal",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 93641,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:40:56.886Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "line": 15,
+                            "column": 15
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-b906da44261b6e640021",
+              "file": "core-flow.spec.ts",
+              "line": 23,
+              "column": 3
+            },
+            {
+              "title": "answers from the vault with a validated, clickable citation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 55329,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:42:31.580Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "line": 15,
+                            "column": 15
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-94093f0619a571e74525",
+              "file": "core-flow.spec.ts",
+              "line": 45,
+              "column": 3
+            },
+            {
+              "title": "projects persist tasks and compute progress from defined tasks",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 48099,
+                      "error": {
+                        "message": "Error: locator.check: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for locator('.task-row').filter({ hasText: 'خواندن منبع' }).getByRole('checkbox')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" aria-label=\"انجام شد: خواندن منبع\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n",
+                        "stack": "Error: locator.check: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for locator('.task-row').filter({ hasText: 'خواندن منبع' }).getByRole('checkbox')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" aria-label=\"انجام شد: خواندن منبع\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n\n    at /app/david/brain/second-brain-app/e2e/core-flow.spec.ts:71:87",
+                        "location": {
+                          "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                          "column": 87,
+                          "line": 71
+                        },
+                        "snippet": "  69 |       await expect(page.locator('.task-row', { hasText: t })).toBeVisible();\n  70 |     }\n> 71 |     await page.locator('.task-row', { hasText: 'خواندن منبع' }).getByRole('checkbox').check();\n     |                                                                                       ^\n  72 |     await page.reload();\n  73 |     await expect(page.getByText('(۱ از ۲)')).toBeVisible();\n  74 |   });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "column": 87,
+                            "line": 71
+                          },
+                          "message": "Error: locator.check: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for locator('.task-row').filter({ hasText: 'خواندن منبع' }).getByRole('checkbox')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" aria-label=\"انجام شد: خواندن منبع\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n\n\n  69 |       await expect(page.locator('.task-row', { hasText: t })).toBeVisible();\n  70 |     }\n> 71 |     await page.locator('.task-row', { hasText: 'خواندن منبع' }).getByRole('checkbox').check();\n     |                                                                                       ^\n  72 |     await page.reload();\n  73 |     await expect(page.getByText('(۱ از ۲)')).toBeVisible();\n  74 |   });\n    at /app/david/brain/second-brain-app/e2e/core-flow.spec.ts:71:87"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:43:27.176Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "line": 15,
+                            "column": 15
+                          }
+                        }
+                      ],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/app/david/brain/second-brain-app/evidence/e2e/artifacts/core-flow-core-flow-source-64da8-progress-from-defined-tasks-desktop/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/app/david/brain/second-brain-app/evidence/e2e/artifacts/core-flow-core-flow-source-64da8-progress-from-defined-tasks-desktop/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/app/david/brain/second-brain-app/evidence/e2e/artifacts/core-flow-core-flow-source-64da8-progress-from-defined-tasks-desktop/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "column": 87,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-7fbcaf59831cd110b17f",
+              "file": "core-flow.spec.ts",
+              "line": 58,
+              "column": 3
+            },
+            {
+              "title": "studio builds a template draft and exports Markdown",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:44:28.029Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-24cae1d3cb5cb5e46790",
+              "file": "core-flow.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "@mobile layout has no horizontal overflow and a bottom navigation",
+              "ok": true,
+              "tags": [
+                "mobile"
+              ],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "desktop",
+                  "projectName": "desktop",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:44:28.041Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-187bbd4fd7ea00bbc2e5",
+              "file": "core-flow.spec.ts",
+              "line": 88,
+              "column": 3
+            },
+            {
+              "title": "@mobile layout has no horizontal overflow and a bottom navigation",
+              "ok": true,
+              "tags": [
+                "mobile"
+              ],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [
+                    {
+                      "type": "serial",
+                      "location": {
+                        "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                        "line": 15,
+                        "column": 15
+                      }
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile",
+                  "projectName": "mobile",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 59524,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-06T15:44:46.968Z",
+                      "annotations": [
+                        {
+                          "type": "serial",
+                          "location": {
+                            "file": "/app/david/brain/second-brain-app/e2e/core-flow.spec.ts",
+                            "line": 15,
+                            "column": 15
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d34e015bf61f0703063d-58f039a034f81b72f931",
+              "file": "core-flow.spec.ts",
+              "line": 88,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-06T15:40:04.636Z",
+    "duration": 347602.70999999996,
+    "expected": 4,
+    "skipped": 2,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

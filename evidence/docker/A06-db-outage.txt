@@ -1,0 +1,15 @@
+== before
+/secondbrain-test-api-1 restarts=0 state=running
+/secondbrain-test-worker-1 restarts=0 state=running
+== stop postgres
+ready during outage: 503
+/secondbrain-test-api-1 restarts=0 state=running
+/secondbrain-test-worker-1 restarts=0 state=running
+== start postgres
+ready after recovery: {"ok":true,"schema":2}
+/secondbrain-test-api-1 restarts=0 state=running
+/secondbrain-test-worker-1 restarts=0 state=running
+job after recovery: source status=ready_for_analysis
+worker-1  | {"t":"2026-10-06T14:23:35.987Z","level":"warn","service":"worker","msg":"queue.error","role":"worker","error":"terminating connection due to administrator command"}
+worker-1  | {"t":"2026-10-06T14:23:36.116Z","level":"warn","service":"worker","msg":"queue.error","role":"worker","error":"terminating connection due to administrator command"}
+worker-1  | {"t":"2026-10-06T14:23:36.117Z","level":"warn","service":"worker","msg":"queue.error","role":"worker","error":"terminating connection due to administrator command"}

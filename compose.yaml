@@ -1,0 +1,152 @@
+# Second Brain OS — local / single-host deployment.
+# Only `web` publishes a port, and by default only on 127.0.0.1. See compose.production.yaml for HTTPS.
+# Secrets are files under ./secrets created by ./scripts/bootstrap.sh (never committed, never in images).
+name: secondbrain
+
+x-hardening: &hardening
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  restart: unless-stopped
+  logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
+
+x-app-env: &app-env
+  APP_PROFILE: ${APP_PROFILE:-production}
+  APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:8080}
+  APP_VERSION: ${APP_VERSION:-0.1.0}
+  MODEL_PROVIDER_MODE: ${MODEL_PROVIDER_MODE:-anthropic}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_HOST: postgres
+  DB_USER: secondbrain
+  DB_NAME: secondbrain
+  DB_PASSWORD_FILE: /run/secrets/db_password
+  MASTER_KEY_FILE: /run/secrets/master_key
+  INTERNAL_TOKEN_FILE: /run/secrets/internal_token
+  UPSTREAM_COMMIT: d6861ccde4c483afa8c4805373ee447f1e87b33c
+  TZ: UTC
+
+services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: secondbrain
+      POSTGRES_DB: secondbrain
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    secrets: [db_password]
+    volumes: [pg-data:/var/lib/postgresql/data]
+    networks: [db]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U secondbrain -d secondbrain"], interval: 5s, timeout: 5s, retries: 20, start_period: 10s }
+    security_opt: ["no-new-privileges:true"]
+    shm_size: 256m
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
+
+  migrate:
+    image: secondbrain/api:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, target: api }
+    command: ["node", "dist/cli.js", "migrate"]
+    environment: *app-env
+    secrets: [db_password, master_key, internal_token]
+    networks: [db]
+    depends_on: { postgres: { condition: service_healthy } }
+    <<: *hardening
+    restart: "no"
+
+  api:
+    image: secondbrain/api:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, target: api }
+    environment:
+      <<: *app-env
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      NATIVE_CLAUDE_URL: ${NATIVE_CLAUDE_URL:-http://native-claude:8792}
+    secrets: [db_password, master_key, internal_token]
+    volumes: [vault-data:/data/vault, source-data:/data/sources, backup-data:/data/backups]
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    networks: [edge, db, native, egress]
+    depends_on: { postgres: { condition: service_healthy }, migrate: { condition: service_completed_successfully } }
+    mem_limit: 1g
+    cpus: 2
+    <<: *hardening
+
+  worker:
+    image: secondbrain/worker:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, target: worker }
+    environment:
+      <<: *app-env
+      RUNNER_URL: http://agent-runner:8791
+      INFERENCE_PROXY_URL: http://worker:8790/inference
+      RUN_CONCURRENCY: ${RUN_CONCURRENCY:-2}
+    secrets: [db_password, master_key, internal_token]
+    # No vault mount: the API is the only canonical writer and runs read the DB. Sources volume stores fetched URLs.
+    volumes: [source-data:/data/sources]
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    networks: [db, agent, egress]
+    depends_on: { postgres: { condition: service_healthy }, migrate: { condition: service_completed_successfully } }
+    mem_limit: 1g
+    cpus: 2
+    <<: *hardening
+
+  agent-runner:
+    image: secondbrain/agent-runner:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, target: agent-runner }
+    environment:
+      INTERNAL_TOKEN_FILE: /run/secrets/internal_token
+      RUNNER_CONCURRENCY: ${RUN_CONCURRENCY:-2}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: UTC
+    # Only the internal token. No DB password, no master key, no vault, no Docker socket, no internet.
+    secrets: [internal_token]
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    networks: [agent]
+    mem_limit: 1536m
+    cpus: 2
+    pids_limit: 256
+    <<: *hardening
+
+  web:
+    image: secondbrain/web:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, target: web }
+    ports: ["${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    networks: [edge]
+    depends_on: { api: { condition: service_healthy } }
+    <<: *hardening
+
+  # Optional: official interactive Claude Code environment. Enable with `--profile native`.
+  native-claude:
+    profiles: ["native"]
+    image: secondbrain/native-claude:${APP_VERSION:-0.1.0}
+    build: { context: ., dockerfile: infra/docker/native.Dockerfile }
+    environment:
+      TZ: UTC
+    # No secrets at all. Own HOME volume for the CLI's credentials; staging area for manual work. Nothing else.
+    volumes: [native-home:/home/claude, native-staging:/workspace]
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    networks: [native, native-egress]
+    mem_limit: 1536m
+    cpus: 2
+    pids_limit: 256
+    <<: *hardening
+
+networks:
+  edge: {}
+  db: { internal: true }
+  agent: { internal: true }
+  native: { internal: true }
+  egress: {}
+  native-egress: {}
+
+volumes:
+  pg-data: {}
+  vault-data: {}
+  source-data: {}
+  backup-data: {}
+  native-home: {}
+  native-staging: {}
+
+secrets:
+  db_password: { file: ./secrets/db_password }
+  master_key: { file: ./secrets/master_key }
+  internal_token: { file: ./secrets/internal_token }

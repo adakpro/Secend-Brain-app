@@ -1,0 +1,10 @@
+/* Library / graph / learn page additions; reference tokens only. */
+.graph-wrap{height:540px;padding:0}
+.graph-canvas{position:absolute;inset:0}
+.graph-filters .check-row{background:none;padding:4px 6px}
+.graph-panel .connection-item small{margin-inline-start:4px}
+.learn-pick{max-height:260px;overflow:auto;display:grid;gap:6px;margin-top:8px}
+.quiz-excerpt{border-inline-start:3px solid var(--teal);background:var(--teal-soft);padding:8px 12px;border-radius:8px;margin:10px 0;font-size:11px}
+@media(max-width:730px){.graph-wrap{height:420px}}
+@media(max-width:500px){.graph-wrap{height:360px}.graph-filters{gap:6px}}
+@media(max-width:980px){.graph-wrap .graph-panel{position:absolute;top:auto;bottom:52px;left:8px;right:8px;width:auto;max-height:55%;margin:0}}

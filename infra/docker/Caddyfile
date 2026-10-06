@@ -1,0 +1,19 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$DOMAIN} {
+	tls {
+		issuer {$TLS_ISSUER}
+	}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	# Access log without query strings (terminal tickets) is produced by nginx behind; Caddy logs nothing.
+	reverse_proxy web:8080 {
+		flush_interval -1
+	}
+}

@@ -1,0 +1,2 @@
+== A05/C09 prod stack without key: readiness vs capabilities (read-only)
+{"ok":true,"schema":2}{"readiness": {"api": true, "database": true, "queue": {"schedule-tick": {"waiting": 0, "active": 0, "failed24h": 0}, "source-extract": {"waiting": 0, "active": 0, "failed24h": 0}, "__pgboss__send-it": {"waiting": 0, "active": 0, "failed24h": 0}}, "stuckRuns": 0}, "capabilities": {"modelFeatures": false, "modelFeaturesReason": "اتصال API مدل تنظیم نشده است؛ مدیر باید از «تنظیمات › اتصال Claude» کلید API ثبت کند.", "provider": null, "textSearch": true}, "profile": "production"}
