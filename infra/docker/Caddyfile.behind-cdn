@@ -1,0 +1,46 @@
+# Origin server behind a CDN (ArvanCloud) that terminates public TLS for {$DOMAIN}.
+# - Only the CDN may connect (CDN_RANGES; source: https://www.arvancloud.ir/en/ips.txt).
+# - :80 serves plain HTTP to the CDN; :443 offers an internal certificate for "HTTPS to origin" mode.
+# - The real client IP is taken from X-Forwarded-For only when the peer is a trusted CDN address.
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		trusted_proxies static {$CDN_RANGES}
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+(origin) {
+	@not_cdn not remote_ip {$CDN_RANGES}
+	respond @not_cdn "forbidden" 403
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy web:8080 {
+		flush_interval -1
+	}
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete *
+				}
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+			}
+		}
+	}
+}
+
+http://{$DOMAIN} {
+	import origin
+}
+
+https://{$DOMAIN} {
+	tls internal
+	import origin
+}

@@ -8,7 +8,7 @@ services:
     environment:
       APP_ORIGIN: https://${DOMAIN:?set DOMAIN in .env}${HTTPS_PORT_SUFFIX:-}
       COOKIE_SECURE: "true"
-      TRUST_PROXY: uniquelocal
+      TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
   caddy:
     image: caddy:2.10.2-alpine
     ports: ["${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:443", "${HTTPS_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"]
@@ -16,7 +16,9 @@ services:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:-}
       TLS_ISSUER: ${TLS_ISSUER:-acme}
-    volumes: ["./infra/docker/Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config"]
+      CDN_RANGES: ${CDN_RANGES:-}
+    # CADDYFILE=./infra/docker/Caddyfile.behind-cdn when a CDN (e.g. ArvanCloud) terminates public TLS.
+    volumes: ["${CADDYFILE:-./infra/docker/Caddyfile}:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config"]
     networks: [edge]
     depends_on: { web: { condition: service_healthy } }
     cap_drop: ["ALL"]
