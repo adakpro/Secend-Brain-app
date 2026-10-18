@@ -145,8 +145,8 @@ function Connections() {
     <section className="card settings-section"><h2>اتصال‌های Claude</h2>
       <p className="muted" style={{ fontSize: 12, marginBottom: 14 }}>ورود به این برنامه، اتصال API مدل و ورود حساب در محیط رسمی Claude Code سه موضوع جدا هستند و وضعیت هرکدام مستقل نمایش داده می‌شود.</p>
       <div className="grid-2">
-        <Link className="card pw-conn" to="/settings/integrations/claude"><Tile icon="spark" color="blue" /><div><h3>اتصال API Claude</h3><p className="muted" style={{ fontSize: 11 }}>تنها مسیر قابلیت‌های خودکار (پردازش منبع، پرسش، خروجی، زمان‌بندی) با کلید API خود مالک و صورتحساب API.</p></div></Link>
-        <Link className="card pw-conn" to="/settings/integrations/claude#native"><Tile icon="monitor" color="purple" /><div><h3>محیط تعاملی رسمی Claude Code</h3><p className="muted" style={{ fontSize: 11 }}>ورود مستقیم خود مالک به باینری رسمی در ترمینال خصوصی؛ به صف خودکار یا API برنامه وصل نمی‌شود.</p></div></Link>
+        <Link className="card pw-conn" to="/settings/integrations/model"><Tile icon="spark" color="blue" /><div><h3>اتصال API OpenAI / Claude</h3><p className="muted" style={{ fontSize: 11 }}>تنها مسیر قابلیت‌های خودکار (پردازش منبع، پرسش، خروجی، زمان‌بندی) با کلید API خود مالک و صورتحساب API.</p></div></Link>
+        <Link className="card pw-conn" to="/settings/integrations/model#native"><Tile icon="monitor" color="purple" /><div><h3>محیط تعاملی Codex / Claude Code</h3><p className="muted" style={{ fontSize: 11 }}>ورود مستقیم خود مالک به باینری رسمی در ترمینال خصوصی؛ به صف خودکار یا API برنامه وصل نمی‌شود.</p></div></Link>
       </div>
     </section>
   );
@@ -173,7 +173,7 @@ export default function SettingsPage() {
       <nav className="settings-nav" aria-label="بخش‌های تنظیمات">
         {SECTIONS.map(([id, l]) => <NavLink key={id} to={id === 'general' ? '/settings' : `/settings/${id}`} end className={() => `setting-option ${cur === id ? 'active' : ''}`}>{l}</NavLink>)}
         {me.user.isAdmin ? <>
-          <NavLink to="/settings/integrations/claude" className="setting-option"><Icon name="spark" size="sm" />اتصال Claude</NavLink>
+          <NavLink to="/settings/integrations/model" className="setting-option"><Icon name="spark" size="sm" />اتصال مدل</NavLink>
           <NavLink to="/admin/users" className="setting-option"><Icon name="settings" size="sm" />کاربران</NavLink>
           <NavLink to="/admin/audit" className="setting-option"><Icon name="shield" size="sm" />گزارش audit</NavLink>
           <NavLink to="/admin/backups" className="setting-option"><Icon name="database" size="sm" />پشتیبان</NavLink>

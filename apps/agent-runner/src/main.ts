@@ -5,6 +5,7 @@ import path from 'node:path';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { JobRequest, RunnerEvent } from '@sb/contracts';
+import { runOpenAI } from './openai';
 import { buildTools } from './tools';
 
 const PORT = Number(process.env.PORT ?? 8791);
@@ -38,6 +39,10 @@ app.post('/jobs', async (req, reply) => {
   // Each job gets a private, empty HOME/config dir; nothing persists between jobs.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'job-'));
   try {
+    if (job.provider === 'openai') {
+      await runOpenAI(job, emit, abort.signal);
+      return reply;
+    }
     const { server, allowed, readChunks, proposals } = buildTools(job, emit);
     const q = query({
       prompt: job.userPrompt,
@@ -113,6 +118,6 @@ function classify(msg: string): string {
   return 'runner_error';
 }
 // Never echo tokens or long provider bodies back to the worker.
-const sanitize = (s: string) => s.replace(/sb_[A-Za-z0-9_-]{10,}/g, '[token]').replace(/sk-ant-[A-Za-z0-9_-]+/g, '[key]').slice(0, 500);
+const sanitize = (s: string) => s.replace(/sb_[A-Za-z0-9_-]{10,}/g, '[token]').replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 500);
 
 app.listen({ host: '0.0.0.0', port: PORT }).then(() => app.log.info({ sdk: SDK_VERSION, max: MAX_CONCURRENCY }, 'runner.listening'));

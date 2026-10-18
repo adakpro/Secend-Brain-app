@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { CreateUserBody, StoreApiKeyBody, ApiSettingsBody, DisconnectBody } from '@sb/contracts';
-import { audit, listModels } from '@sb/core';
+import { audit, modelExecution } from '@sb/core';
 import { type Deps, parse, requireAdmin, requireStepUp, requireWs, HttpError } from '../context';
 
 export const adminRoutes = (deps: Deps): FastifyPluginAsync => async app => {
@@ -56,55 +56,70 @@ export const adminRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     return { items: r.rows };
   });
 
-  // ---------------- Claude API card ----------------
-  app.get('/admin/integrations/claude/api', async req => {
+  app.get('/admin/integrations/model/execution', async req => {
     await requireAdmin(req, deps);
-    const c = await deps.creds.active();
-    const today = (await deps.db.query(`SELECT coalesce(sum(cost_estimate_usd),0)::float AS cost, count(*)::int AS runs, coalesce(sum((usage->>'input_tokens')::bigint),0)::bigint AS input_tokens, coalesce(sum((usage->>'output_tokens')::bigint),0)::bigint AS output_tokens FROM agent_runs WHERE provider='anthropic' AND created_at > date_trunc('day', now())`)).rows[0];
-    const active = (await deps.db.query(`SELECT count(*)::int n FROM agent_runs WHERE status IN ('queued','running')`)).rows[0].n;
-    return {
-      credential: c, mode: deps.cfg.modelProviderMode, usageToday: { ...today, costLabel: 'تخمین SDK سمت کلاینت؛ صورتحساب قطعی Anthropic نیست' }, activeRuns: active,
-      revokeHelp: 'حذف یا قطع اتصال در این برنامه فقط نسخهٔ رمزشدهٔ محلی را پاک می‌کند. برای ابطال واقعی کلید، در Claude Console به بخش API Keys بروید و کلید را Disable/Delete کنید.',
-    };
+    return { mode: await modelExecution(deps.db, deps.cfg) };
   });
-
-  app.post('/admin/integrations/claude/api/key', async req => {
+  app.patch('/admin/integrations/model/execution', async req => {
     const { session } = await requireAdmin(req, deps); requireStepUp(req);
-    const b = parse(StoreApiKeyBody, req.body);
-    const c = await deps.creds.store(session.userId, b.label, b.apiKey, req.ip);
-    // Immediately run the no-cost validation so the card shows a real state.
-    const test = await deps.creds.testConnection(session.userId, 'validate', req.ip);
-    return { credential: await deps.creds.active() ?? c, test };
+    const mode = (req.body as { mode?: string } | null)?.mode;
+    if (mode !== 'codex' && mode !== 'api') throw new HttpError(422, 'invalid_mode', 'مسیر مدل نامعتبر است.');
+    await deps.db.query("INSERT INTO app_meta(key,value) VALUES ('model_execution',$1::jsonb) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()", [JSON.stringify(mode)]);
+    await audit(deps.db, { actorUserId: session.userId, action: 'model.execution_changed', result: 'success', ip: req.ip, meta: { mode } });
+    return { mode };
   });
 
-  app.post('/admin/integrations/claude/api/test', async req => {
-    const { session } = await requireAdmin(req, deps);
-    const { kind } = (req.body ?? {}) as { kind?: 'validate' | 'generate' };
-    if (kind === 'generate') requireStepUp(req);
-    return deps.creds.testConnection(session.userId, kind === 'generate' ? 'generate' : 'validate', req.ip);
-  });
+  // Keep the historical Claude routes as aliases for existing clients.
+  for (const prefix of ['/admin/integrations/claude/api', '/admin/integrations/model/api']) {
+    app.get(`${prefix}`, async req => {
+      await requireAdmin(req, deps);
+      const c = await deps.creds.active();
+      const today = (await deps.db.query(`SELECT coalesce(sum(cost_estimate_usd),0)::float AS cost, count(*)::int AS runs, coalesce(sum((usage->>'input_tokens')::bigint),0)::bigint AS input_tokens, coalesce(sum((usage->>'output_tokens')::bigint),0)::bigint AS output_tokens FROM agent_runs WHERE provider='${deps.creds.provider}' AND created_at > date_trunc('day', now())`)).rows[0];
+      const active = (await deps.db.query(`SELECT count(*)::int n FROM agent_runs WHERE status IN ('queued','running')`)).rows[0].n;
+      return {
+        provider: deps.creds.provider, credential: c, mode: deps.cfg.modelProviderMode, usageToday: { ...today, costLabel: deps.creds.provider === 'openai' ? 'تخمین براساس نرخ توکن تنظیم‌شده؛ بدون تخفیف کش' : 'تخمین SDK؛ صورتحساب قطعی نیست' }, activeRuns: active,
+        revokeHelp: deps.creds.provider === 'openai' ? 'برای ابطال واقعی کلید، آن را در platform.openai.com/api-keys حذف کنید.' : 'حذف یا قطع اتصال در این برنامه فقط نسخهٔ رمزشدهٔ محلی را پاک می‌کند. برای ابطال واقعی کلید، در Claude Console به بخش API Keys بروید و کلید را Disable/Delete کنید.',
+      };
+    });
 
-  app.get('/admin/integrations/claude/api/models', async req => {
-    await requireAdmin(req, deps);
-    const c = await deps.creds.decryptActive();
-    if (!c) throw new HttpError(409, 'model_not_connected', 'هیچ کلید API ثبت نشده است.');
-    const models = await listModels(c.key, deps.cfg.anthropicBaseUrl);
-    await deps.db.query(`UPDATE provider_credentials SET available_models=$2 WHERE id=$1`, [c.id, JSON.stringify(models)]);
-    return { models };
-  });
+    app.post(`${prefix}/key`, async req => {
+      const { session } = await requireAdmin(req, deps); requireStepUp(req);
+      const b = parse(StoreApiKeyBody, req.body);
+      const c = await deps.creds.store(session.userId, b.label, b.apiKey, req.ip);
+      // Immediately run the no-cost validation so the card shows a real state.
+      const test = await deps.creds.testConnection(session.userId, 'validate', req.ip);
+      return { credential: await deps.creds.active() ?? c, test };
+    });
 
-  app.patch('/admin/integrations/claude/api/settings', async req => {
-    const { session } = await requireAdmin(req, deps); requireStepUp(req);
-    const b = parse(ApiSettingsBody, req.body);
-    const cur = await deps.creds.active();
-    if (b.model && cur && cur.availableModels.length && !cur.availableModels.some(m => m.id === b.model)) throw new HttpError(422, 'model_not_found', 'این مدل در فهرست مدل‌های قابل استفادهٔ کلید نیست؛ ابتدا «آزمون اتصال» را اجرا کنید.');
-    if (b.allowedModels?.length && b.model && !b.allowedModels.includes(b.model)) throw new HttpError(422, 'model_not_allowed', 'مدل پیش‌فرض باید در فهرست مدل‌های مجاز باشد.');
-    return { credential: await deps.creds.updateSettings(session.userId, b) };
-  });
+    app.post(`${prefix}/test`, async req => {
+      const { session } = await requireAdmin(req, deps);
+      const { kind } = (req.body ?? {}) as { kind?: 'validate' | 'generate' };
+      if (kind === 'generate') requireStepUp(req);
+      return deps.creds.testConnection(session.userId, kind === 'generate' ? 'generate' : 'validate', req.ip);
+    });
 
-  app.post('/admin/integrations/claude/api/disconnect', async req => {
-    const { session } = await requireAdmin(req, deps); requireStepUp(req);
-    const b = parse(DisconnectBody, req.body);
-    return deps.creds.disconnect(session.userId, b.cancelActiveRuns, req.ip);
-  });
+    app.get(`${prefix}/models`, async req => {
+      await requireAdmin(req, deps);
+      const c = await deps.creds.decryptActive();
+      if (!c) throw new HttpError(409, 'model_not_connected', 'هیچ کلید API ثبت نشده است.');
+      const models = await deps.creds.models(c.key);
+      await deps.db.query(`UPDATE provider_credentials SET available_models=$2 WHERE id=$1`, [c.id, JSON.stringify(models)]);
+      return { models };
+    });
+
+    app.patch(`${prefix}/settings`, async req => {
+      const { session } = await requireAdmin(req, deps); requireStepUp(req);
+      const b = parse(ApiSettingsBody, req.body);
+      const cur = await deps.creds.active();
+      if (b.model && cur && cur.availableModels.length && !cur.availableModels.some(m => m.id === b.model)) throw new HttpError(422, 'model_not_found', 'این مدل در فهرست مدل‌های قابل استفادهٔ کلید نیست؛ ابتدا «آزمون اتصال» را اجرا کنید.');
+      if (b.allowedModels?.length && b.model && !b.allowedModels.includes(b.model)) throw new HttpError(422, 'model_not_allowed', 'مدل پیش‌فرض باید در فهرست مدل‌های مجاز باشد.');
+      return { credential: await deps.creds.updateSettings(session.userId, b) };
+    });
+
+    app.post(`${prefix}/disconnect`, async req => {
+      const { session } = await requireAdmin(req, deps); requireStepUp(req);
+      const b = parse(DisconnectBody, req.body);
+      return deps.creds.disconnect(session.userId, b.cancelActiveRuns, req.ip);
+    });
+  }
 };

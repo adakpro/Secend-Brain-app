@@ -1,7 +1,8 @@
+import { codexOutput } from './codex-output';
 import { randomUUID } from 'node:crypto';
 import type { JobRequest, RunnerEvent, JobBundle } from '@sb/contracts';
 import {
-  type Db, type AppConfig, RunService, CredentialService, ChangeSetEngine, validateAgentOps, buildSystemPrompt, skillById,
+  type Db, type AppConfig, modelExecution, RunService, CredentialService, ChangeSetEngine, validateAgentOps, buildSystemPrompt, skillById,
   INGEST_OUTPUT_SCHEMA, QUERY_OUTPUT_SCHEMA, STUDIO_OUTPUT_SCHEMA, QUIZ_OUTPUT_SCHEMA, buildIngestBundle, buildQueryBundle, buildDocsBundle,
   validateCitations, excerptOf, log, withTx, audit,
 } from '@sb/core';
@@ -18,13 +19,17 @@ export class Executor {
     const skill = skillById(run.skill_id);
     if (!skill || skill.status !== 'implemented') return this.fail(runId, 'skill_not_available', 'این مهارت در این نسخه پیاده نشده است.', false);
 
-    // Connection: real API card, or the explicit test-only mock. Never a silent fallback.
+    const useCodex = await modelExecution(this.db, this.cfg) === 'codex' && this.cfg.modelProviderMode !== 'mock';
+    const provider = useCodex ? 'codex-cli' : this.cfg.modelProviderMode;
     let model: string; let credentialId: string | null = null; let settings: Record<string, any>;
-    if (this.cfg.modelProviderMode === 'mock') {
+    if (useCodex) {
+      if (!this.cfg.nativeUrl) return this.fail(runId, 'native_unavailable', 'سرویس Codex فعال نیست.', false);
+      model = 'codex-cli'; settings = { timeoutS: skill.limits.timeoutS, maxOutputTokens: 16000 };
+    } else if (this.cfg.modelProviderMode === 'mock') {
       model = 'claude-mock-test'; settings = { perRunBudgetUsd: 1, maxOutputTokens: 4000, timeoutS: 120 };
     } else {
       const cred = await this.creds.decryptActive();
-      if (!cred) return this.fail(runId, 'model_not_connected', 'اتصال API مدل برقرار نیست. از «تنظیمات › اتصال Claude» کلید API را ثبت کنید.', false);
+      if (!cred) return this.fail(runId, 'model_not_connected', 'اتصال API مدل برقرار نیست. از «تنظیمات › اتصال مدل» کلید API را ثبت کنید.', false);
       if (cred.status === 'invalid') return this.fail(runId, 'invalid_key', 'کلید API در آخرین آزمون نامعتبر بود.', false);
       if (!cred.settings.model) return this.fail(runId, 'model_not_selected', 'مدل پیش‌فرض در پنل اتصال انتخاب نشده است.', false);
       model = cred.settings.model; credentialId = cred.id; settings = cred.settings;
@@ -33,7 +38,8 @@ export class Executor {
     }
 
     const attemptId = randomUUID();
-    await this.runs.transition(this.db, runId, 'running', { attempt: run.attempt + 1, attempt_id: attemptId, started_at: new Date().toISOString(), heartbeat_at: new Date().toISOString(), provider: this.cfg.modelProviderMode === 'mock' ? 'mock' : 'anthropic', model, error_code: null, error_message: null });
+    await this.runs.transition(this.db, runId, 'running', { attempt: run.attempt + 1, attempt_id: attemptId, started_at: new Date().toISOString(), heartbeat_at: new Date().toISOString(), provider, model, error_code: null, error_message: null });
+    run.provider = provider;
     if (run.source_id) await this.db.query(`UPDATE sources SET status='analyzing', updated_at=now() WHERE id=$1`, [run.source_id]);
 
     let bundle: JobBundle; let userPrompt: string; let schema: Record<string, unknown>; let coverage: { totalChunks: number; included: number } | null = null;
@@ -44,9 +50,9 @@ export class Executor {
       return this.fail(runId, code, code === 'no_external' ? 'این منبع با برچسب «عدم ارسال بیرونی» علامت خورده و به مدل فرستاده نمی‌شود.' : (e as Error).message.slice(0, 300), false);
     }
     const timeoutS = Math.min(settings.timeoutS ?? skill.limits.timeoutS, skill.limits.timeoutS);
-    const token = await this.runs.issueToken(runId, credentialId, model, settings.maxOutputTokens ?? 16000, timeoutS + 60);
+    const token = useCodex ? '' : await this.runs.issueToken(runId, credentialId, model, settings.maxOutputTokens ?? 16000, timeoutS + 60);
     const job: JobRequest = {
-      jobId: runId, attemptId, skillId: skill.id, systemPrompt: buildSystemPrompt(skill.id), userPrompt, model,
+      provider: this.cfg.modelProviderMode, jobId: runId, attemptId, skillId: skill.id, systemPrompt: buildSystemPrompt(skill.id), userPrompt, model,
       maxTurns: skill.limits.maxTurns, maxBudgetUsd: settings.perRunBudgetUsd ?? 0.5, timeoutS, maxOutputTokens: settings.maxOutputTokens ?? 16000,
       outputSchema: schema, writable: skill.mode === 'propose', proxy: { baseUrl: this.cfg.inferenceProxyPublicUrl, token }, bundle,
     };
@@ -66,7 +72,7 @@ export class Executor {
     let pendingText = ''; let lastFlush = Date.now();
     const flushText = async () => { if (pendingText) { const t = pendingText; pendingText = ''; await this.runs.event(this.db, run.workspace_id, runId, 'text_delta', { text: t }); } lastFlush = Date.now(); };
     try {
-      const res = await fetch(`${this.cfg.runnerUrl}/jobs`, { method: 'POST', headers: { authorization: `Bearer ${this.internalToken}`, 'content-type': 'application/json' }, body: JSON.stringify(job), signal: ctl.signal });
+      const res = await fetch(useCodex ? `${this.cfg.nativeUrl}/runs` : `${this.cfg.runnerUrl}/jobs`, { method: 'POST', headers: { authorization: `Bearer ${this.internalToken}`, 'content-type': 'application/json' }, body: JSON.stringify(job), signal: ctl.signal });
       if (res.status === 429) throw new RetryableRunError('runner_busy');
       if (!res.ok || !res.body) throw new Error(`runner http ${res.status}`);
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
@@ -78,7 +84,11 @@ export class Executor {
         while ((nl = buf.indexOf('\n')) >= 0) {
           const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
           if (!line.trim()) continue;
-          const ev = JSON.parse(line) as RunnerEvent;
+          const raw = JSON.parse(line);
+          let events: RunnerEvent[];
+          try { events = useCodex && raw.type === 'codex_output' ? codexOutput(job, raw.output) : [raw as RunnerEvent]; }
+          catch { events = [{ type: 'error', code: 'invalid_codex_output', message: 'خروجی Codex با قالب مورد انتظار سازگار نبود؛ دوباره اجرا کنید.', retryable: false }]; }
+          for (const ev of events) {
           if (ev.type === 'text_delta') { pendingText += ev.text; if (Date.now() - lastFlush > 250) await flushText(); continue; }
           await flushText();
           if (ev.type === 'proposal') { proposals.set(ev.op.path, ev.op); await this.runs.event(this.db, run.workspace_id, runId, 'proposal', { op: ev.op.op, path: ev.op.path }); }
@@ -89,6 +99,7 @@ export class Executor {
           else if (ev.type === 'coverage') readChunks = ev.readChunks;
           else if (ev.type === 'result') result = ev;
           else if (ev.type === 'error') error = ev;
+          }
         }
       }
       await flushText();
@@ -97,6 +108,7 @@ export class Executor {
       await this.runs.revokeTokens(runId);
       const st = (await this.db.query('SELECT status FROM agent_runs WHERE id=$1', [runId])).rows[0]?.status;
       if (ctl.signal.aborted || st === 'cancel_requested') return this.canceled(run);
+      if (e instanceof RetryableRunError && run.attempt + 1 >= 3) return this.fail(runId, 'runner_busy', 'محیط مدل مشغول است؛ ترمینال باز را ببندید و دوباره اجرا کنید.', true, run.source_id);
       if (e instanceof RetryableRunError) { await this.runs.transition(this.db, runId, 'queued', { error_code: 'runner_busy' }); throw e; }
       return this.fail(runId, 'runner_unreachable', 'سرویس اجرای عامل در دسترس نبود.', true, run.source_id);
     } finally { clearInterval(heartbeat); }
@@ -151,7 +163,7 @@ export class Executor {
   private async finalize(run: Record<string, any>, bundle: JobBundle, result: Extract<RunnerEvent, { type: 'result' }>, proposals: Map<string, any>, rejected: { path: string; reason: string }[], readChunks: string[], coverage: { totalChunks: number; included: number } | null) {
     const ws = run.workspace_id; const runId = run.id;
     const s = (result.structured ?? {}) as Record<string, any>;
-    const provider = this.cfg.modelProviderMode === 'mock' ? 'mock' : 'anthropic';
+    const provider = run.provider;
     if (run.skill_id === 'ingest') {
       const allowed = new Set(bundle.chunks.map(c => c.key));
       const { ops, issues } = validateAgentOps([...proposals.values()], { allowedSourceRefs: allowed });

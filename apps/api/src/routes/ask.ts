@@ -82,7 +82,7 @@ export const askRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     }
     const run = await deps.runs.create(deps.db, { workspaceId: ws.id, kind: 'query', skillId: 'query', input: { question: b.question }, scope: b.scope, requestedBy: userId, conversationId, idempotencyKey: b.idempotencyKey });
     if (!run.existing) await deps.boss!.send(QUEUES.run, { runId: run.id }, { singletonKey: run.id });
-    return { conversationId, mode: 'model', runId: run.id, provider: deps.cfg.modelProviderMode };
+    return { conversationId, mode: 'model', runId: run.id, provider: avail.provider };
   });
 
   app.get('/citations/:id', async req => {

@@ -10,7 +10,7 @@ export interface Me {
   csrfToken: string; stepUpValidUntil: string | null;
   preferences: Prefs & { recentDocumentIds: string[] };
   workspaces: { id: string; slug: string; name: string; role: 'owner' | 'admin' | 'member' | 'viewer'; isDemo: boolean }[];
-  activeWorkspaceId: string | null; profile: string; providerMode: 'anthropic' | 'mock';
+  activeWorkspaceId: string | null; profile: string; providerMode: 'anthropic' | 'openai' | 'mock';
 }
 
 const Ctx = createContext<Me | null>(null);

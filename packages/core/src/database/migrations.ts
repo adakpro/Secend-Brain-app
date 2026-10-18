@@ -567,4 +567,22 @@ CREATE TABLE native_staging (
 ALTER TABLE native_tickets ADD COLUMN prefill text CHECK (prefill IS NULL OR length(prefill) <= 600);
 `,
   },
+  {
+    version: 4,
+    name: 'openai_provider',
+    sql: `
+ALTER TABLE provider_credentials DROP CONSTRAINT provider_credentials_provider_check;
+ALTER TABLE provider_credentials ADD CONSTRAINT provider_credentials_provider_check CHECK (provider IN ('anthropic','openai'));
+ALTER TABLE agent_runs DROP CONSTRAINT agent_runs_provider_check;
+ALTER TABLE agent_runs ADD CONSTRAINT agent_runs_provider_check CHECK (provider IN ('anthropic','openai','mock'));
+`,
+  },
+  {
+    version: 5,
+    name: 'codex_runs',
+    sql: `
+ALTER TABLE agent_runs DROP CONSTRAINT agent_runs_provider_check;
+ALTER TABLE agent_runs ADD CONSTRAINT agent_runs_provider_check CHECK (provider IN ('anthropic','openai','mock','codex-cli'));
+`,
+  },
 ];

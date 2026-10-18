@@ -14,6 +14,9 @@ x-app-env: &app-env
   APP_PROFILE: ${APP_PROFILE:-production}
   APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:8080}
   APP_VERSION: ${APP_VERSION:-0.1.0}
+  NATIVE_CLI_MODE: ${NATIVE_CLI_MODE:-claude}
+  NATIVE_CLAUDE_URL: ${NATIVE_CLAUDE_URL:-http://native-claude:8792}
+  MODEL_EXECUTION: ${MODEL_EXECUTION:-api}
   MODEL_PROVIDER_MODE: ${MODEL_PROVIDER_MODE:-anthropic}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DB_HOST: postgres
@@ -82,7 +85,7 @@ services:
     # No vault mount: the API is the only canonical writer and runs read the DB. Sources volume stores fetched URLs.
     volumes: [source-data:/data/sources]
     tmpfs: ["/tmp:size=256m,mode=1777"]
-    networks: [db, agent, egress]
+    networks: [db, agent, native, egress]
     depends_on: { postgres: { condition: service_healthy }, migrate: { condition: service_completed_successfully } }
     mem_limit: 1g
     cpus: 2
@@ -118,11 +121,17 @@ services:
   native-claude:
     profiles: ["native"]
     image: secondbrain/native-claude:${APP_VERSION:-0.1.0}
-    build: { context: ., dockerfile: infra/docker/native.Dockerfile }
+    build:
+      context: .
+      dockerfile: infra/docker/native.Dockerfile
+      args:
+        NATIVE_CLI_MODE: ${NATIVE_CLI_MODE:-claude}
+        CODEX_VERSION: ${CODEX_VERSION:-0.162.1}
     environment:
       TZ: UTC
+      NATIVE_CLI_MODE: ${NATIVE_CLI_MODE:-claude}
     # No secrets at all. Own HOME volume for the CLI's credentials; staging area for manual work. Nothing else.
-    volumes: [native-home:/home/claude, native-staging:/workspace]
+    volumes: ["native-${NATIVE_CLI_MODE:-claude}-home:/home/claude", "native-${NATIVE_CLI_MODE:-claude}-staging:/workspace"]
     tmpfs: ["/tmp:size=256m,mode=1777"]
     networks: [native, native-egress]
     mem_limit: 1536m
@@ -143,8 +152,10 @@ volumes:
   vault-data: {}
   source-data: {}
   backup-data: {}
-  native-home: {}
-  native-staging: {}
+  native-claude-home: { name: "${COMPOSE_PROJECT_NAME:-secondbrain}_native-home" }
+  native-claude-staging: { name: "${COMPOSE_PROJECT_NAME:-secondbrain}_native-staging" }
+  native-codex-home: {}
+  native-codex-staging: {}
 
 secrets:
   db_password: { file: ./secrets/db_password }

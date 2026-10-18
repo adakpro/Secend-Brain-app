@@ -1,3 +1,4 @@
+import { registerOpenAIProxy } from './openai-proxy';
 import Fastify from 'fastify';
 import { Readable } from 'node:stream';
 import { sha256Buf, type Db, type CredentialService, type AppConfig, log } from '@sb/core';
@@ -14,7 +15,9 @@ export function buildProxy(db: Db, creds: CredentialService, cfg: AppConfig) {
   const app = Fastify({ logger: false, bodyLimit: 8 * 1024 * 1024 });
   app.get('/health', async () => ({ ok: true }));
 
+  registerOpenAIProxy(app, db, creds, cfg);
   app.post('/inference/v1/messages', async (req, reply) => {
+    if (cfg.modelProviderMode === 'openai') return reply.code(403).send({ error: { type: 'permission_error', message: 'provider not allowed' } });
     const token = String(req.headers['x-api-key'] ?? '');
     if (!token.startsWith('sb_')) return reply.code(401).send({ type: 'error', error: { type: 'authentication_error', message: 'invalid run token' } });
     const t = (await db.query(

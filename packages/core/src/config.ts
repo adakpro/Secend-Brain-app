@@ -29,8 +29,11 @@ export interface AppConfig {
   backupRoot: string;
   cookieSecure: boolean;
   trustProxy: boolean | string;
-  modelProviderMode: 'anthropic' | 'mock';
+  modelProviderMode: 'anthropic' | 'openai' | 'mock';
+  modelExecution: 'codex' | 'api';
   anthropicBaseUrl: string;
+  openaiBaseUrl: string;
+  nativeCliMode: 'claude' | 'codex';
   workerInternalUrl: string;
   runnerUrl: string;
   inferenceProxyPublicUrl: string;
@@ -49,10 +52,15 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     ? `postgres://${process.env.DB_USER ?? 'secondbrain'}:${encodeURIComponent(dbPassword)}@${process.env.DB_HOST ?? 'postgres'}:${process.env.DB_PORT ?? '5432'}/${process.env.DB_NAME ?? 'secondbrain'}`
     : '');
   const appOrigin = process.env.APP_ORIGIN ?? 'http://127.0.0.1:8080';
-  const modelProviderMode = (process.env.MODEL_PROVIDER_MODE ?? 'anthropic') as 'anthropic' | 'mock';
+  const modelProviderMode = (process.env.MODEL_PROVIDER_MODE ?? 'anthropic') as 'anthropic' | 'openai' | 'mock';
+  if (!['anthropic', 'openai', 'mock'].includes(modelProviderMode)) throw new Error('invalid MODEL_PROVIDER_MODE');
+  const nativeCliMode = process.env.NATIVE_CLI_MODE ?? 'claude';
+  if (!['claude', 'codex'].includes(nativeCliMode)) throw new Error('invalid NATIVE_CLI_MODE');
   if (modelProviderMode === 'mock' && profile === 'production') {
     throw new Error('MODEL_PROVIDER_MODE=mock is refused in the production profile');
   }
+  const modelExecution = process.env.MODEL_EXECUTION ?? (nativeCliMode === 'codex' && modelProviderMode !== 'mock' ? 'codex' : 'api');
+  if (!['codex', 'api'].includes(modelExecution)) throw new Error('invalid MODEL_EXECUTION');
   const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : appOrigin.startsWith('https://');
   if (profile === 'production' && !cookieSecure && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(appOrigin)) {
     throw new Error('production profile on a non-localhost origin requires HTTPS (APP_ORIGIN=https://…)');
@@ -68,7 +76,10 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     cookieSecure,
     trustProxy: process.env.TRUST_PROXY ? (process.env.TRUST_PROXY === 'true' ? true : process.env.TRUST_PROXY) : false,
     modelProviderMode,
+    modelExecution: modelExecution as 'codex' | 'api',
     anthropicBaseUrl: 'https://api.anthropic.com',
+    openaiBaseUrl: 'https://api.openai.com',
+    nativeCliMode: nativeCliMode as 'claude' | 'codex',
     workerInternalUrl: process.env.WORKER_INTERNAL_URL ?? 'http://worker:8790',
     runnerUrl: process.env.RUNNER_URL ?? 'http://agent-runner:8791',
     inferenceProxyPublicUrl: process.env.INFERENCE_PROXY_URL ?? 'http://worker:8790/inference',

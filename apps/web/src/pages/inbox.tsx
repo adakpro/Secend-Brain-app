@@ -32,7 +32,7 @@ export default function InboxPage() {
   return (
     <>
       <PageHeader title="ورودی‌ها" description="هر ایده، مقاله و یادداشت؛ یک نقطهٔ شروع برای دانشت." action={writer ? <button className="btn primary" onClick={() => setAdd(true)}><Icon name="plus" size="sm" /> افزودن منبع</button> : undefined} />
-      {status.data && !modelOk ? <Notice kind="warning">اتصال مدل برقرار نیست: {status.data.capabilities.modelFeaturesReason} منابع ذخیره، استخراج و جست‌وجو می‌شوند؛ «تحلیل» خودکار تا اتصال API غیرفعال است؛ <Link to="/settings/integrations/claude#native">یا با اشتراک Claude در محیط تعاملی Claude Code کار کن</Link>.</Notice>
+      {status.data && !modelOk ? <Notice kind="warning">اتصال مدل برقرار نیست: {status.data.capabilities.modelFeaturesReason} منابع ذخیره، استخراج و جست‌وجو می‌شوند؛ برای تحلیل هوشمند، <Link to="/settings/integrations/model#native">به حساب Codex وارد شو</Link>.</Notice>
         : status.data?.capabilities?.provider === 'mock' ? <Notice kind="warning">این نصب در حالت آزمایشی (mock) است؛ پیشنهادها خروجی مدل واقعی نیستند.</Notice> : null}
       <div className="toolbar">
         <Tabs label="فیلتر وضعیت" value={filter} onChange={v => setParams({ status: v })} items={FILTERS.map(f => [f[0], f[1]] as [string, string])} />
@@ -54,7 +54,7 @@ export default function InboxPage() {
               {writer && ['ready_for_analysis', 'analysis_failed', 'canceled'].includes(s.status) && s.sensitivity !== 'no_external'
                 ? <button className="btn small soft" disabled={!modelOk} title={modelOk ? '' : 'اتصال مدل برقرار نیست'} onClick={() => act(() => api(`/sources/${s.id}/analyze`, { json: { idempotencyKey: uid() } }), 'تحلیل در صف قرار گرفت.')}><Icon name="spark" size="sm" /> تحلیل</button> : null}
               {writer && !modelOk && native.data?.loggedIn && ['ready_for_analysis', 'analysis_failed', 'canceled'].includes(s.status) && s.sensitivity !== 'no_external'
-                ? <button className="btn small primary" onClick={() => act(() => claude.start({ kind: 'ingest', sourceId: s.id }), 'Claude در پس‌زمینه شروع به تحلیل کرد.')}><Icon name="spark" size="sm" /> تحلیل با Claude</button> : null}
+                ? <button className="btn small primary" onClick={() => act(() => claude.start({ kind: 'ingest', sourceId: s.id }), 'عامل در پس‌زمینه شروع به تحلیل کرد.')}><Icon name="spark" size="sm" /> تحلیل با Codex / Claude</button> : null}
               {s.changeset_id && s.status === 'awaiting_review' ? <Link className="btn small primary" to={`/review/${s.changeset_id}`}><Icon name="review" size="sm" /> بررسی</Link> : null}
               {writer && ['queued', 'analyzing'].includes(s.status) && s.last_run?.id ? <button className="btn small" onClick={() => act(() => api(`/runs/${s.last_run.id}/cancel`, { json: {} }), 'درخواست لغو ثبت شد.')}>لغو</button> : null}
               {writer && ['extraction_failed', 'needs_ocr'].includes(s.status) ? <button className="btn small" onClick={() => act(() => api(`/sources/${s.id}/retry-extract`, { json: {} }), 'استخراج دوباره در صف است.')}><Icon name="refresh" size="sm" /> تلاش دوباره</button> : null}

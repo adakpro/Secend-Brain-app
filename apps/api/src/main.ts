@@ -27,7 +27,7 @@ async function main() {
   await hub.start();
   const deps: Deps & { hub: RunEventHub } = {
     cfg, db, ring: () => ring, boss, internalToken, hub,
-    auth: new AuthService(db, () => ring), creds: new CredentialService(db, () => ring, cfg.anthropicBaseUrl),
+    auth: new AuthService(db, () => ring), creds: new CredentialService(db, () => ring, cfg.modelProviderMode === 'openai' ? cfg.openaiBaseUrl : cfg.anthropicBaseUrl, cfg.modelProviderMode === 'openai' ? 'openai' : 'anthropic'),
     vault, engine, sources: new SourceService(db, cfg.sourcesRoot), runs: new RunService(db),
   };
 

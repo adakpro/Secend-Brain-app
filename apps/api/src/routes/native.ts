@@ -15,7 +15,7 @@ const slug = (t: string) => t.replace(/[\\/:*?"<>|#^[\]\u0000-\u001f]/g, ' ').re
 function stagingClaudeMd(contract: string) {
   return `# Staging workspace — Second Brain OS
 
-You are running inside the owner's private Claude Code terminal, in a STAGING COPY of their vault.
+You are running inside the owner's private Codex or Claude Code workspace, in a STAGING COPY of their vault.
 Nothing here changes the real vault directly: when the owner is done, they close the terminal and press
 "آماده‌سازی تغییرات برای بررسی" in the app; every change is then shown as a diff and applied only after approval.
 
@@ -143,11 +143,11 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     }
     const vdir = vendorDir();
     const contract = fs.readFileSync(path.join(vdir, 'vault-template/CLAUDE.md'), 'utf8');
-    files.push({ path: 'CLAUDE.md', content: stagingClaudeMd(contract) });
+    files.push({ path: deps.cfg.nativeCliMode === 'codex' ? 'AGENTS.md' : 'CLAUDE.md', content: stagingClaudeMd(contract) });
     for (const sk of fs.readdirSync(path.join(vdir, 'skills'), { withFileTypes: true })) {
       if (!sk.isDirectory()) continue;
       const f = path.join(vdir, 'skills', sk.name, 'SKILL.md');
-      if (fs.existsSync(f)) files.push({ path: `.claude/skills/${sk.name}/SKILL.md`, content: fs.readFileSync(f, 'utf8') });
+      if (fs.existsSync(f)) files.push({ path: `${deps.cfg.nativeCliMode === 'codex' ? '.agents' : '.claude'}/skills/${sk.name}/SKILL.md`, content: fs.readFileSync(f, 'utf8') });
     }
     for (const c of STAGING_COMMANDS) {
       const f = path.join(vdir, 'commands', `${c}.md`);
@@ -178,21 +178,21 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     const b = (req.body ?? {}) as { kind?: string; sourceId?: string; question?: string };
     const st = await nativeStatus(deps);
     if (!st.serviceUp) throw new HttpError(503, 'native_unreachable', String(st.reason ?? 'سرویس native در دسترس نیست.'));
-    if (!st.loggedIn) throw new HttpError(409, 'native_not_logged_in', 'ابتدا در کارت «محیط تعاملی رسمی» وارد حساب Claude شو.');
+    if (!st.loggedIn) throw new HttpError(409, 'native_not_logged_in', 'ابتدا در کارت «محیط تعاملی رسمی» در محیط رسمی وارد حساب شو.');
     let prefill: string;
     if (b.kind === 'ingest') {
       const s = (await deps.db.query(`SELECT id, sensitivity, status FROM sources WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL`, [ws.id, b.sourceId ?? null])).rows[0];
       if (!s) throw new HttpError(404, 'not_found', 'منبع پیدا نشد.');
-      if (s.sensitivity === 'no_external') throw new HttpError(409, 'no_external', 'این منبع «عدم ارسال بیرونی» دارد و به Claude فرستاده نمی‌شود.');
+      if (s.sensitivity === 'no_external') throw new HttpError(409, 'no_external', 'این منبع «عدم ارسال بیرونی» دارد و به مدل فرستاده نمی‌شود.');
       const prep = await prepareStaging(req, session.userId);
       const raw = prep.rawBySource[s.id];
       if (!raw) throw new HttpError(409, 'not_extracted', 'متن این منبع هنوز استخراج نشده است.');
-      prefill = `/ingest ${raw}`;
+      prefill = deps.cfg.nativeCliMode === 'codex' ? `Use the second-brain-ingest skill to ingest ${raw}; follow AGENTS.md.` : `/ingest ${raw}`;
     } else if (b.kind === 'ask') {
       const q = String(b.question ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500);
       if (q.length < 2) throw new HttpError(422, 'validation_failed', 'پرسش خالی است.');
       await prepareStaging(req, session.userId);
-      prefill = `/ask ${q}`;
+      prefill = deps.cfg.nativeCliMode === 'codex' ? `Use the second-brain-query skill to answer from this vault: ${q}` : `/ask ${q}`;
     } else throw new HttpError(422, 'invalid_kind', 'نوع کار نامعتبر است.');
     const ticket = randomToken(32);
     await deps.db.query(`INSERT INTO native_tickets(user_id, session_id, ticket_hash, action, expires_at, prefill) VALUES ($1,$2,$3,'shell', now() + make_interval(secs => $4), $5)`, [session.userId, session.sessionId, sha256Buf(ticket), TICKET_TTL_S, prefill]);
@@ -239,7 +239,7 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     }
     const missing = Object.keys(snap.base).filter(p => !seen.has(p));
     if (!ops.length) return { changesetId: null, imported: 0, skipped, conflicts, deletionsIgnored: missing.length };
-    const id = await deps.engine.propose({ workspaceId: ws.id, runId, origin: 'native_import', title: 'تغییرات محیط تعاملی Claude Code', summary: `${ops.length} فایل از staging؛ ${conflicts.length} تعارض و ${skipped.length} مورد نادیده گرفته شد.${missing.length ? ` ${missing.length} حذف در staging وارد نشد (حذف فقط با تأیید صریح جدا).` : ''}`, ops, sourceRefs: [], report: { sourceLabel: label, skipped, conflicts, deletionsIgnored: missing, provider: 'claude-code-subscription' } });
+    const id = await deps.engine.propose({ workspaceId: ws.id, runId, origin: 'native_import', title: `تغییرات محیط تعاملی ${deps.cfg.nativeCliMode === 'codex' ? 'Codex' : 'Claude Code'}`, summary: `${ops.length} فایل از staging؛ ${conflicts.length} تعارض و ${skipped.length} مورد نادیده گرفته شد.${missing.length ? ` ${missing.length} حذف در staging وارد نشد (حذف فقط با تأیید صریح جدا).` : ''}`, ops, sourceRefs: [], report: { sourceLabel: label, skipped, conflicts, deletionsIgnored: missing, provider: deps.cfg.nativeCliMode === 'codex' ? 'codex-cli' : 'claude-code-subscription' } });
     await deps.db.query(`UPDATE native_staging SET status='imported', changeset_id=$2, updated_at=now() WHERE id=$1`, [snap.id, id]);
     await audit(deps.db, { workspaceId: ws.id, actorUserId: userId, action: 'native.staging_imported', targetType: 'changeset', targetId: id, result: 'success', meta: { ops: ops.length, conflicts: conflicts.length, skipped: skipped.length } });
     return { changesetId: id, imported: ops.length, skipped, conflicts, deletionsIgnored: missing.length };
@@ -262,20 +262,20 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
     const b = (req.body ?? {}) as { kind?: string; sourceId?: string; question?: string; conversationId?: string };
     const st = await nativeStatus(deps);
     if (!st.serviceUp) throw new HttpError(503, 'native_unreachable', String(st.reason ?? 'سرویس native در دسترس نیست.'));
-    if (!st.loggedIn) throw new HttpError(409, 'native_not_logged_in', 'ابتدا در «تنظیمات › اتصال Claude» وارد حساب Claude شو.');
-    const busy = (await deps.db.query(`SELECT id FROM agent_runs WHERE model='claude-code-subscription' AND status IN ('queued','running','cancel_requested')`)).rows[0];
-    if (busy) throw new HttpError(409, 'native_busy', 'یک تحلیل دیگر با Claude در حال اجراست؛ پس از پایان آن دوباره امتحان کن.');
+    if (!st.loggedIn) throw new HttpError(409, 'native_not_logged_in', 'ابتدا در «تنظیمات › اتصال مدل» در محیط رسمی وارد حساب شو.');
+    const busy = (await deps.db.query(`SELECT id FROM agent_runs WHERE model IN ('claude-code-subscription','codex-cli') AND status IN ('queued','running','cancel_requested')`)).rows[0];
+    if (busy) throw new HttpError(409, 'native_busy', 'یک تحلیل دیگر در محیط رسمی در حال اجراست؛ پس از پایان آن دوباره امتحان کن.');
     let prompt: string; let runId: string; let conversationId: string | null = null; let sourceId: string | null = null;
     if (b.kind === 'ingest') {
       const s = (await deps.db.query(`SELECT id, title, sensitivity FROM sources WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL`, [ws.id, b.sourceId ?? null])).rows[0];
       if (!s) throw new HttpError(404, 'not_found', 'منبع پیدا نشد.');
-      if (s.sensitivity === 'no_external') throw new HttpError(409, 'no_external', 'این منبع «عدم ارسال بیرونی» دارد و به Claude فرستاده نمی‌شود.');
+      if (s.sensitivity === 'no_external') throw new HttpError(409, 'no_external', 'این منبع «عدم ارسال بیرونی» دارد و به مدل فرستاده نمی‌شود.');
       const prep = await prepareStaging(req, session.userId);
       const raw = prep.rawBySource[s.id];
       if (!raw) throw new HttpError(409, 'not_extracted', 'متن این منبع هنوز استخراج نشده است.');
       sourceId = s.id;
-      prompt = `Ingest the source file \`${raw}\` into this vault by following the second-brain-ingest skill and CLAUDE.md exactly: read it completely, check existing pages, then create or update pages only under wiki/sources/, wiki/concepts/, wiki/entities/ and wiki/synthesis/ with correct frontmatter and [[wikilinks]] in both directions. Do not edit raw/, wiki/index.md or wiki/log.md. Finish with the report format of the skill, written in Persian.`;
-      runId = (await deps.runs.create(deps.db, { workspaceId: ws.id, kind: 'ingest', skillId: 'ingest', input: { sourceId: s.id, via: 'claude-code-subscription' }, requestedBy: session.userId, sourceId: s.id })).id;
+      prompt = `Ingest the source file \`${raw}\` into this vault by following the second-brain-ingest skill and the workspace instructions exactly: read it completely, check existing pages, then create or update pages only under wiki/sources/, wiki/concepts/, wiki/entities/ and wiki/synthesis/ with correct frontmatter and [[wikilinks]] in both directions. Do not edit raw/, wiki/index.md or wiki/log.md. Finish with the report format of the skill, written in Persian.`;
+      runId = (await deps.runs.create(deps.db, { workspaceId: ws.id, kind: 'ingest', skillId: 'ingest', input: { sourceId: s.id, via: deps.cfg.nativeCliMode === 'codex' ? 'codex-cli' : 'claude-code-subscription' }, requestedBy: session.userId, sourceId: s.id })).id;
     } else if (b.kind === 'ask') {
       const q = String(b.question ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 1500);
       if (q.length < 2) throw new HttpError(422, 'validation_failed', 'پرسش خالی است.');
@@ -283,13 +283,13 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
       prompt = `Answer this question using ONLY the pages of this vault, following the second-brain-query skill: start from wiki/index.md, read the relevant pages, name every page you used as [[page]] inline, and say plainly what the vault does not cover. Do not edit any file. Answer in the language of the question.\n\nQuestion: ${q}`;
       conversationId = b.conversationId ?? (await deps.db.query(`INSERT INTO conversations(workspace_id, user_id, title, scope) VALUES ($1,$2,$3,'{"type":"workspace"}') RETURNING id`, [ws.id, session.userId, q.slice(0, 80)])).rows[0].id;
       await deps.db.query(`INSERT INTO messages(workspace_id, conversation_id, role, mode, content) VALUES ($1,$2,'user','question',$3)`, [ws.id, conversationId, q]);
-      runId = (await deps.runs.create(deps.db, { workspaceId: ws.id, kind: 'query', skillId: 'query', input: { question: q, via: 'claude-code-subscription' }, requestedBy: session.userId, conversationId: conversationId! })).id;
+      runId = (await deps.runs.create(deps.db, { workspaceId: ws.id, kind: 'query', skillId: 'query', input: { question: q, via: deps.cfg.nativeCliMode === 'codex' ? 'codex-cli' : 'claude-code-subscription' }, requestedBy: session.userId, conversationId: conversationId! })).id;
     } else throw new HttpError(422, 'invalid_kind', 'نوع کار نامعتبر است.');
     let job: { id: string };
     try { job = await nativeFetch(deps, '/jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }) }) as { id: string }; }
     catch (e) { await deps.runs.transition(deps.db, runId, 'failed', { finished_at: new Date().toISOString(), error_code: 'native_start_failed', error_message: (e as Error).message }); throw e; }
-    await deps.runs.transition(deps.db, runId, 'running', { started_at: new Date().toISOString(), heartbeat_at: new Date().toISOString(), model: 'claude-code-subscription', attempt: 1 });
-    if (sourceId) await deps.db.query(`UPDATE sources SET status='analyzing', status_detail='Claude Code (اشتراک) در حال تحلیل', updated_at=now() WHERE id=$1`, [sourceId]);
+    await deps.runs.transition(deps.db, runId, 'running', { started_at: new Date().toISOString(), heartbeat_at: new Date().toISOString(), model: deps.cfg.nativeCliMode === 'codex' ? 'codex-cli' : 'claude-code-subscription', attempt: 1 });
+    if (sourceId) await deps.db.query(`UPDATE sources SET status='analyzing', status_detail='عامل CLI در حال تحلیل', updated_at=now() WHERE id=$1`, [sourceId]);
     await audit(deps.db, { workspaceId: ws.id, actorUserId: session.userId, action: 'native.job_started', targetType: 'run', targetId: runId, result: 'success', meta: { kind: b.kind } });
     void pollJob({ wsId: ws.id, userId: session.userId, runId, jobId: job.id, kind: b.kind as 'ingest' | 'ask', sourceId, conversationId });
     return { runId, conversationId };
@@ -334,7 +334,7 @@ export const nativeRoutes = (deps: Deps): FastifyPluginAsync => async app => {
           }
         } else {
           await deps.db.query(`INSERT INTO messages(workspace_id, conversation_id, role, mode, content, meta, run_id) VALUES ($1,$2,'assistant','model_answer',$3,$4,$5)`,
-            [j.wsId, j.conversationId, String(state.result?.text || text).slice(0, 20000), { provider: 'claude-code-subscription', unvalidatedCitations: true }, j.runId]);
+            [j.wsId, j.conversationId, String(state.result?.text || text).slice(0, 20000), { provider: deps.cfg.nativeCliMode === 'codex' ? 'codex-cli' : 'claude-code-subscription', unvalidatedCitations: true }, j.runId]);
           await deps.runs.transition(deps.db, j.runId, 'succeeded', { finished_at: now });
         }
       } catch (e) {

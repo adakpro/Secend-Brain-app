@@ -1,3 +1,4 @@
+import { listOpenAIModels, testOpenAIGeneration } from './openai';
 import type { Db } from '../database/pool';
 import { Keyring, seal, open, sha256Hex } from '../crypto/envelope';
 import { audit } from '../vault/service';
@@ -64,9 +65,10 @@ export async function testGeneration(key: string, model: string, baseUrl?: strin
 
 export interface CredentialSettings {
   model?: string; allowedModels?: string[]; perRunBudgetUsd?: number; dailyBudgetUsd?: number;
+  inputPricePerMillion?: number; outputPricePerMillion?: number;
   timeoutS?: number; concurrency?: number; maxOutputTokens?: number; activeRunPolicy?: 'let_finish' | 'cancel';
 }
-export const DEFAULT_SETTINGS: Required<Omit<CredentialSettings, 'model' | 'allowedModels'>> = {
+export const DEFAULT_SETTINGS: Required<Omit<CredentialSettings, 'model' | 'allowedModels' | 'inputPricePerMillion' | 'outputPricePerMillion'>> = {
   perRunBudgetUsd: 0.5, dailyBudgetUsd: 5, timeoutS: 300, concurrency: 2, maxOutputTokens: 16000, activeRunPolicy: 'let_finish',
 };
 
@@ -76,7 +78,9 @@ export interface CredentialPublic {
 }
 
 export class CredentialService {
-  constructor(private db: Db, private ring: () => Keyring, private baseUrl = ANTHROPIC_API) {}
+  constructor(private db: Db, private ring: () => Keyring, private baseUrl = ANTHROPIC_API, public readonly provider: 'anthropic' | 'openai' = 'anthropic') {}
+
+  async models(key: string) { return this.provider === 'openai' ? listOpenAIModels(key, this.baseUrl) : listModels(key, this.baseUrl); }
 
   private toPublic(r: Record<string, any>): CredentialPublic {
     return { id: r.id, label: r.label, last4: r.last4, fingerprint: r.fingerprint, status: r.status, lastTestedAt: r.last_tested_at, lastTestKind: r.last_test_kind,
@@ -84,7 +88,7 @@ export class CredentialService {
   }
 
   async active(): Promise<CredentialPublic | null> {
-    const r = await this.db.query(`SELECT * FROM provider_credentials WHERE provider='anthropic' AND disconnected_at IS NULL`);
+    const r = await this.db.query(`SELECT * FROM provider_credentials WHERE provider='${this.provider}' AND disconnected_at IS NULL`);
     return r.rows[0] ? this.toPublic(r.rows[0]) : null;
   }
 
@@ -95,7 +99,7 @@ export class CredentialService {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
-      const prev = await client.query(`SELECT id, settings FROM provider_credentials WHERE provider='anthropic' AND disconnected_at IS NULL FOR UPDATE`);
+      const prev = await client.query(`SELECT id, settings FROM provider_credentials WHERE provider='${this.provider}' AND disconnected_at IS NULL FOR UPDATE`);
       if (prev.rows[0]) {
         await client.query(`UPDATE provider_credentials SET disconnected_at=now(), status='disconnected', ciphertext='\\x00'::bytea, updated_at=now() WHERE id=$1`, [prev.rows[0].id]);
         await client.query(`UPDATE run_tokens SET revoked_at=now() WHERE revoked_at IS NULL AND credential_id=$1`, [prev.rows[0].id]);
@@ -104,9 +108,9 @@ export class CredentialService {
       const sealed = seal(this.ring(), key, `cred:${id}`);
       const ins = await client.query(
         `INSERT INTO provider_credentials(id, provider, label, ciphertext, nonce, key_version, last4, fingerprint, settings, created_by)
-         VALUES ($1,'anthropic',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [id, label.slice(0, 100) || 'Anthropic API', sealed.ciphertext, sealed.nonce, sealed.keyVersion, key.slice(-4), sha256Hex(key).slice(0, 16), prev.rows[0]?.settings ?? {}, actorId]);
-      await audit(client, { actorUserId: actorId, action: prev.rows[0] ? 'integration.claude_api.key_replaced' : 'integration.claude_api.key_added', targetType: 'credential', targetId: id, result: 'success', ip, meta: { last4: key.slice(-4) } });
+         VALUES ($1,'${this.provider}',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [id, label.slice(0, 100) || `${this.provider} API`, sealed.ciphertext, sealed.nonce, sealed.keyVersion, key.slice(-4), sha256Hex(key).slice(0, 16), prev.rows[0]?.settings ?? {}, actorId]);
+      await audit(client, { actorUserId: actorId, action: prev.rows[0] ? `integration.${this.provider}_api.key_replaced` : `integration.${this.provider}_api.key_added`, targetType: 'credential', targetId: id, result: 'success', ip, meta: { last4: key.slice(-4) } });
       await client.query('COMMIT');
       return this.toPublic(ins.rows[0]);
     } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
@@ -114,7 +118,7 @@ export class CredentialService {
 
   /** Decrypts the active key for trusted server-side use (worker proxy, connection test). */
   async decryptActive(): Promise<{ id: string; key: string; settings: CredentialSettings; status: string } | null> {
-    const r = (await this.db.query(`SELECT * FROM provider_credentials WHERE provider='anthropic' AND disconnected_at IS NULL`)).rows[0];
+    const r = (await this.db.query(`SELECT * FROM provider_credentials WHERE provider='${this.provider}' AND disconnected_at IS NULL`)).rows[0];
     if (!r) return null;
     return { id: r.id, status: r.status, settings: { ...DEFAULT_SETTINGS, ...r.settings }, key: open(this.ring(), { ciphertext: r.ciphertext, nonce: r.nonce, keyVersion: r.key_version }, `cred:${r.id}`) };
   }
@@ -125,7 +129,7 @@ export class CredentialService {
     try {
       let detail: Record<string, unknown> = {};
       if (kind === 'validate') {
-        const models = await listModels(cred.key, this.baseUrl);
+        const models = await this.models(cred.key);
         await this.db.query(`UPDATE provider_credentials SET available_models=$2 WHERE id=$1`, [cred.id, JSON.stringify(models)]);
         detail = { modelCount: models.length };
         const chosen = cred.settings.model;
@@ -133,24 +137,24 @@ export class CredentialService {
       } else {
         const model = cred.settings.model;
         if (!model) throw new ProviderError('bad_request', 'ابتدا یک مدل انتخاب کنید.', false);
-        detail = await testGeneration(cred.key, model, this.baseUrl);
+        detail = await (this.provider === 'openai' ? testOpenAIGeneration(cred.key, model, this.baseUrl) : testGeneration(cred.key, model, this.baseUrl));
       }
       await this.db.query(`UPDATE provider_credentials SET status='valid', last_tested_at=now(), last_test_kind=$2, last_error_code=NULL, last_error_message=NULL, updated_at=now() WHERE id=$1`, [cred.id, kind]);
-      await audit(this.db, { actorUserId: actorId, action: `integration.claude_api.test_${kind}`, targetType: 'credential', targetId: cred.id, result: 'success', ip });
+      await audit(this.db, { actorUserId: actorId, action: `integration.${this.provider}_api.test_${kind}`, targetType: 'credential', targetId: cred.id, result: 'success', ip });
       return { ok: true as const, kind, detail };
     } catch (e) {
       const pe = e instanceof ProviderError ? e : new ProviderError('network', 'خطای نامشخص', true);
       const status = pe.code === 'invalid_key' || pe.code === 'permission_denied' ? 'invalid' : undefined;
       await this.db.query(`UPDATE provider_credentials SET ${status ? `status='invalid',` : ''} last_tested_at=now(), last_test_kind=$2, last_error_code=$3, last_error_message=$4, updated_at=now() WHERE id=$1`, [cred.id, kind, pe.code, pe.message]);
-      await audit(this.db, { actorUserId: actorId, action: `integration.claude_api.test_${kind}`, targetType: 'credential', targetId: cred.id, result: 'failure', ip, meta: { code: pe.code } });
+      await audit(this.db, { actorUserId: actorId, action: `integration.${this.provider}_api.test_${kind}`, targetType: 'credential', targetId: cred.id, result: 'failure', ip, meta: { code: pe.code } });
       return { ok: false as const, kind, code: pe.code, message: pe.message, retryable: pe.retryable };
     }
   }
 
   async updateSettings(actorId: string, s: CredentialSettings) {
-    const r = await this.db.query(`UPDATE provider_credentials SET settings = settings || $1::jsonb, updated_at=now() WHERE provider='anthropic' AND disconnected_at IS NULL RETURNING *`, [JSON.stringify(s)]);
+    const r = await this.db.query(`UPDATE provider_credentials SET settings = settings || $1::jsonb, updated_at=now() WHERE provider='${this.provider}' AND disconnected_at IS NULL RETURNING *`, [JSON.stringify(s)]);
     if (!r.rows[0]) throw new ProviderError('model_not_connected', 'هیچ کلید API ثبت نشده است.', false);
-    await audit(this.db, { actorUserId: actorId, action: 'integration.claude_api.settings_updated', targetType: 'credential', targetId: r.rows[0].id, result: 'success', meta: { ...s } });
+    await audit(this.db, { actorUserId: actorId, action: `integration.${this.provider}_api.settings_updated`, targetType: 'credential', targetId: r.rows[0].id, result: 'success', meta: { ...s } });
     return this.toPublic(r.rows[0]);
   }
 
@@ -159,13 +163,13 @@ export class CredentialService {
    * revocation at Anthropic; the owner must revoke the key in the Claude Console.
    */
   async disconnect(actorId: string, cancelActiveRuns: boolean, ip?: string) {
-    const r = await this.db.query(`UPDATE provider_credentials SET disconnected_at=now(), status='disconnected', ciphertext='\\x00'::bytea, updated_at=now() WHERE provider='anthropic' AND disconnected_at IS NULL RETURNING id`);
+    const r = await this.db.query(`UPDATE provider_credentials SET disconnected_at=now(), status='disconnected', ciphertext='\\x00'::bytea, updated_at=now() WHERE provider='${this.provider}' AND disconnected_at IS NULL RETURNING id`);
     const tokens = await this.db.query(`UPDATE run_tokens SET revoked_at=now() WHERE revoked_at IS NULL`);
     let canceled = 0;
     if (cancelActiveRuns) {
       canceled = (await this.db.query(`UPDATE agent_runs SET status='cancel_requested', updated_at=now() WHERE status IN ('queued','running')`)).rowCount ?? 0;
     }
-    await audit(this.db, { actorUserId: actorId, action: 'integration.claude_api.disconnected', targetType: 'credential', targetId: r.rows[0]?.id, result: 'success', ip, meta: { revokedTokens: tokens.rowCount, canceledRuns: canceled } });
+    await audit(this.db, { actorUserId: actorId, action: `integration.${this.provider}_api.disconnected`, targetType: 'credential', targetId: r.rows[0]?.id, result: 'success', ip, meta: { revokedTokens: tokens.rowCount, canceledRuns: canceled } });
     return { disconnected: !!r.rowCount, revokedTokens: tokens.rowCount ?? 0, canceledRuns: canceled };
   }
 

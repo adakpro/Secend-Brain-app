@@ -11,12 +11,15 @@ RUN npm ci --omit=dev
 
 FROM ${NODE_IMAGE} AS runtime
 ARG CLAUDE_CODE_VERSION=2.1.291
-ENV NODE_ENV=production DISABLE_AUTOUPDATER=1 HOME=/home/claude
+ARG NATIVE_CLI_MODE=claude
+ARG CODEX_VERSION=0.162.1
+ENV NODE_ENV=production DISABLE_AUTOUPDATER=1 HOME=/home/claude NATIVE_CLI_MODE=${NATIVE_CLI_MODE}
 RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates git ripgrep && rm -rf /var/lib/apt/lists/* \
- && npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
- && claude --version \
+ && if [ "$NATIVE_CLI_MODE" = "codex" ]; then \
+      test -n "$CODEX_VERSION" && npm install -g --no-fund --no-audit "@openai/codex@${CODEX_VERSION}" && codex --version; \
+    else npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" && claude --version; fi \
  && useradd --create-home --home-dir /home/claude --uid 1001 --shell /usr/sbin/nologin claude \
- && mkdir -p /workspace && chown claude:claude /workspace /home/claude
+ && mkdir -p /workspace /home/claude/.codex && chown claude:claude /workspace /home/claude /home/claude/.codex
 WORKDIR /svc
 COPY --from=build /svc/node_modules ./node_modules
 COPY apps/native-claude/package.json ./

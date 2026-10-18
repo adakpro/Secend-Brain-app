@@ -90,7 +90,7 @@ export class RunService {
   }
 
   async todaysSpend(): Promise<number> {
-    const r = await this.db.query(`SELECT coalesce(sum(cost_estimate_usd),0)::float AS s FROM agent_runs WHERE provider='anthropic' AND created_at > date_trunc('day', now())`);
+    const r = await this.db.query(`SELECT coalesce(sum(cost_estimate_usd),0)::float AS s FROM agent_runs WHERE provider IN ('anthropic','openai') AND created_at > date_trunc('day', now())`);
     return Number(r.rows[0].s);
   }
 }

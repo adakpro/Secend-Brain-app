@@ -1,4 +1,4 @@
-import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
+import { tool as sdkTool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { normalizeForSearch, compactForSearch, AGENT_WRITABLE_RE, type JobRequest, type RunnerEvent, type BundleChunk } from '@sb/contracts';
 
@@ -10,6 +10,12 @@ const text = (t: string, isError = false) => ({ content: [{ type: 'text' as cons
  * addition to the SDK tool allowlist.
  */
 export function buildTools(job: JobRequest, emit: (e: RunnerEvent) => void) {
+  const functions: { name: string; description: string; parameters: Record<string, unknown>; execute: (args: unknown) => Promise<unknown> }[] = [];
+  const tool: typeof sdkTool = (name, description, shape, handler, options) => {
+    const schema = z.object(shape);
+    functions.push({ name, description, parameters: z.toJSONSchema(schema, { unrepresentable: 'any' }) as Record<string, unknown>, execute: async args => handler(schema.parse(args) as never, {} as never) });
+    return sdkTool(name, description, shape, handler, options);
+  };
   const chunks = new Map(job.bundle.chunks.map(c => [c.key, c]));
   const docsByPath = new Map(job.bundle.docs.map(d => [d.path, d]));
   const readChunks = new Set<string>();
@@ -103,5 +109,5 @@ export function buildTools(job: JobRequest, emit: (e: RunnerEvent) => void) {
 
   const server = createSdkMcpServer({ name: 'vault', version: '1.0.0', tools });
   const allowed = tools.map(t => `mcp__vault__${t.name}`);
-  return { server, allowed, readChunks, proposals };
+  return { server, allowed, readChunks, proposals, functions };
 }

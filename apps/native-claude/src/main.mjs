@@ -7,6 +7,8 @@
 // ticket + Origin) before proxying a terminal. Credentials are managed solely by the CLI itself in
 // $HOME/.claude on the dedicated `native-home` volume; this code never reads or parses them.
 // Nothing typed into or printed by the terminal is logged or stored.
+import { nativeCommands, codexEvent } from './cli.mjs';
+import { runStructured } from './structured.mjs';
 import http from 'node:http';
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -15,22 +17,26 @@ import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
 
 const PORT = Number(process.env.PORT ?? 8792);
-const HOME = process.env.HOME ?? '/home/claude';
+const CLI_HOME = process.env.HOME ?? '/home/claude';
+const CLI_MODE = process.env.NATIVE_CLI_MODE ?? 'claude';
+if (!['claude', 'codex'].includes(CLI_MODE)) throw new Error('invalid NATIVE_CLI_MODE');
+const CODEX = CLI_MODE === 'codex';
 const STAGING = '/workspace';
-const CLAUDE = process.env.CLAUDE_BIN ?? 'claude';
+const CLI = CODEX ? 'codex' : (process.env.CLAUDE_BIN ?? 'claude');
+const commands = nativeCommands(CLI_MODE);
 const IDLE_MS = 15 * 60 * 1000;
 const MAX_MSG = 64 * 1024;
 const MAX_SESSIONS = 1;
 
 // Fixed command allowlist. The browser never supplies a command.
 const COMMANDS = {
-  login: { args: ['auth', 'login'], cwd: HOME },
+  login: { args: commands.login, cwd: CLI_HOME },
   // The interactive session opens INSIDE the staging vault so the second-brain skills' relative paths (raw/, wiki/) match.
-  shell: { args: [], cwd: path.join(STAGING, 'vault') },
+  shell: { args: commands.shell, cwd: path.join(STAGING, 'vault') },
 };
 
 const childEnv = () => ({
-  HOME, PATH: process.env.PATH, TERM: 'xterm-256color', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: process.env.TZ ?? 'UTC',
+  HOME: CLI_HOME, CODEX_HOME: path.join(CLI_HOME, '.codex'), PATH: process.env.PATH, TERM: 'xterm-256color', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: process.env.TZ ?? 'UTC',
   DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
   // Explicitly NOT passing ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL: the owner signs in with the CLI's own flow.
 });
@@ -39,14 +45,14 @@ const log = (msg, f = {}) => process.stdout.write(JSON.stringify({ t: new Date()
 
 function run(args, timeoutMs = 15000) {
   return new Promise(resolve => {
-    execFile(CLAUDE, args, { env: childEnv(), cwd: HOME, timeout: timeoutMs, maxBuffer: 256 * 1024 }, (err, stdout) => {
-      resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout: String(stdout ?? '') });
+    execFile(CLI, args, { env: childEnv(), cwd: CLI_HOME, timeout: timeoutMs, maxBuffer: 256 * 1024 }, (err, stdout, stderr) => {
+      resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
     });
   });
 }
 
 let versionCache = null;
-async function version() { if (!versionCache) { const r = await run(['--version'], 20000); versionCache = r.stdout.trim().split(/\s+/)[0] || null; } return versionCache; }
+async function version() { if (!versionCache) { const r = await run(['--version'], 20000); versionCache = r.stdout.trim() || null; } return versionCache; }
 
 // Each CLI invocation takes seconds; cache status briefly and share one in-flight refresh.
 let statusCache = null; let statusAt = 0; let inflight = null;
@@ -58,13 +64,14 @@ async function cachedStatus(force = false) {
 
 /** `claude auth status` prints JSON; only allowlisted, minimal fields leave this service. */
 async function authStatus() {
-  const r = await run(['auth', 'status']);
+  const r = await run(commands.status);
   let j = {};
   try { j = JSON.parse(r.stdout); } catch { j = {}; }
   const pick = (...keys) => { for (const k of keys) if (typeof j[k] === 'string' && j[k]) return j[k].slice(0, 200); return null; };
   return {
+    cliMode: CLI_MODE,
     loggedIn: r.code === 0 && (j.loggedIn !== false),
-    authMethod: pick('authMethod') ?? (r.code === 0 ? 'unknown' : 'none'),
+    authMethod: (CODEX ? (/api key/i.test(r.stdout + r.stderr) ? 'API key' : r.code === 0 ? 'ChatGPT' : 'none') : pick('authMethod')) ?? (r.code === 0 ? 'unknown' : 'none'),
     email: pick('email', 'emailAddress', 'accountEmail'),
     orgName: pick('orgName', 'organizationName'),
     statusExitCode: r.code,
@@ -83,13 +90,29 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/logout') {
       for (const s of sessions.values()) s.kill('logout');
       if (runningJob?.proc) { runningJob.status = 'canceled'; runningJob.proc.kill('SIGTERM'); }
-      const r = await run(['auth', 'logout'], 30000);
+      const r = await run(commands.logout, 30000);
       statusCache = null;
       log('auth.logout', { exitCode: r.code });
       return send(200, { ok: r.code === 0, exitCode: r.code });
     }
     if (req.method === 'POST' && req.url === '/sessions/close') { for (const s of sessions.values()) s.kill('closed_by_user'); return send(200, { ok: true }); }
     if (req.method === 'GET' && req.url === '/staging/export') return send(200, exportStaging());
+    if (req.method === 'POST' && req.url === '/runs') {
+      if (!CODEX) return send(409, { error: 'codex_required' });
+      if (runningJob || sessions.size) return send(429, { error: 'native_busy' });
+      let body = ''; for await (const c of req) { body += c; if (body.length > 2 * 1024 * 1024) return send(413, { error: 'too_large' }); }
+      const job = JSON.parse(body);
+      if (!job.bundle || !Array.isArray(job.bundle.chunks) || !job.outputSchema || typeof job.systemPrompt !== 'string' || typeof job.userPrompt !== 'string') return send(422, { error: 'bad_job' });
+      const marker = { status: 'running', proc: null }; runningJob = marker;
+      const ctl = new AbortController(); const close = () => { if (!res.writableEnded) ctl.abort(); };
+      res.on('close', close);
+      res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' });
+      const emit = e => { if (!res.destroyed) res.write(JSON.stringify(e) + '\n'); };
+      try { await runStructured(job, { env: childEnv(), emit, signal: ctl.signal, onProcess: proc => { marker.proc = proc; } }); }
+      catch (e) { emit({ type: 'error', code: e.message === 'codex_timeout' ? 'timeout' : 'codex_failed', message: 'اجرای Codex ناموفق بود؛ وضعیت ورود و محدودیت حساب را بررسی کنید.', retryable: e.message === 'codex_timeout' }); }
+      finally { if (runningJob === marker) runningJob = null; statusCache = null; res.removeListener('close', close); res.end(); }
+      return;
+    }
     if (req.method === 'POST' && req.url === '/jobs') {
       let body = ''; for await (const c of req) { body += c; if (body.length > 20000) return send(413, { error: 'too_large' }); }
       const { prompt } = JSON.parse(body);
@@ -136,7 +159,7 @@ function exportStaging() {
       const abs = path.join(d, e.name);
       if (e.isSymbolicLink()) continue; // symlinks are never exported
       if (e.isDirectory()) { if (!e.name.startsWith('.') && !(d === root && e.name === 'raw')) walk(abs); continue; }
-      if (!e.isFile() || !e.name.endsWith('.md') || (d === root && e.name === 'CLAUDE.md')) continue;
+      if (!e.isFile() || !e.name.endsWith('.md') || (d === root && ['CLAUDE.md', 'AGENTS.md'].includes(e.name))) continue;
       const st = fs.statSync(abs);
       if (st.size > 1024 * 1024) continue;
       total += st.size; if (total > 20 * 1024 * 1024 || out.length > 5000) return;
@@ -163,10 +186,10 @@ function startJob(prompt) {
   const job = { id, status: 'running', events: [], result: null, error: null, startedAt: Date.now(), proc: null };
   jobs.set(id, job); runningJob = job;
   const vault = path.join(STAGING, 'vault');
-  const proc = spawn(CLAUDE, ['-p', prompt, ...HEADLESS_ARGS], { cwd: vault, env: childEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(CLI, CODEX ? [...commands.exec, prompt] : ['-p', prompt, ...HEADLESS_ARGS], { cwd: vault, env: childEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
   job.proc = proc;
   const push = e => { job.events.push({ seq: job.events.length + 1, ...e }); if (job.events.length > 2000) job.events.splice(0, 500); };
-  push({ type: 'progress', message: 'Claude Code شروع به کار کرد' });
+  push({ type: 'progress', message: `${CLI} شروع به کار کرد` });
   let buf = '';
   proc.stdout.on('data', d => {
     buf += d.toString();
@@ -174,6 +197,13 @@ function startJob(prompt) {
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i); buf = buf.slice(i + 1);
       let m; try { m = JSON.parse(line); } catch { continue; }
+      if (CODEX) {
+        const normalized = codexEvent(m);
+        if (normalized.event) push(normalized.event);
+        if (normalized.result) job.result = normalized.result;
+        if (normalized.error) job.error = normalized.error;
+        continue;
+      }
       if (m.type === 'assistant' && m.message?.content) {
         for (const b of m.message.content) {
           if (b.type === 'text' && b.text) push({ type: 'text', text: b.text.slice(0, 4000) });
@@ -190,6 +220,10 @@ function startJob(prompt) {
   });
   let errTail = '';
   proc.stderr.on('data', d => { errTail = (errTail + d.toString()).slice(-2000); });
+  proc.on('error', () => {
+    job.status = 'failed'; job.error = 'CLI could not start'; job.proc = null; runningJob = null; statusCache = null;
+    push({ type: 'end', status: job.status });
+  });
   proc.on('close', code => {
     if (job.status === 'canceled') { /* keep */ }
     else if (code === 0 && job.result && !job.result.isError) job.status = 'succeeded';
@@ -220,7 +254,7 @@ function openSession(ws, action, cols, rows, prefill = '') {
   const cmd = COMMANDS[action];
   fs.mkdirSync(path.join(STAGING, 'vault'), { recursive: true });
   const id = Math.random().toString(36).slice(2, 10);
-  const term = pty.spawn(CLAUDE, cmd.args, { name: 'xterm-256color', cols: clamp(cols, 20, 300), rows: clamp(rows, 5, 120), cwd: cmd.cwd, env: childEnv() });
+  const term = pty.spawn(CLI, cmd.args, { name: 'xterm-256color', cols: clamp(cols, 20, 300), rows: clamp(rows, 5, 120), cwd: cmd.cwd, env: childEnv() });
   let idle;
   const touch = () => { clearTimeout(idle); idle = setTimeout(() => kill('idle_timeout'), IDLE_MS); };
   const kill = reason => { try { term.kill(); } catch { /* already gone */ } if (ws.readyState === 1) ws.close(4000, reason); sessions.delete(id); clearTimeout(idle); log('pty.closed', { action, reason }); };

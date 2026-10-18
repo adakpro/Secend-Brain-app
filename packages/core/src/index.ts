@@ -19,6 +19,7 @@ export * from './ingest/extract';
 export * from './ingest/chat-import';
 export * from './ingest/sources';
 export * from './providers/anthropic';
+export * from './providers/openai';
 export * from './agents/registry';
 export * from './agents/prompts';
 export * from './runs/service';
@@ -29,3 +30,5 @@ export * from './schedules/schedules';
 export * from './queue/queue';
 export * from './archive/zip';
 export * from './backup/backup';
+
+export { modelExecution } from './providers/execution';

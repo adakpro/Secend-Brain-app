@@ -1,25 +1,33 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { SCHEMA_VERSION } from '@sb/core';
+import { SCHEMA_VERSION, modelExecution } from '@sb/core';
 import type { Deps } from '../context';
 
 /** Whether model-dependent features may start a run right now (API card or explicit test mock). */
-export async function modelAvailability(deps: Deps): Promise<{ available: boolean; reason: string; provider: 'anthropic' | 'mock' | null }> {
+export async function modelAvailability(deps: Deps): Promise<{ available: boolean; reason: string; provider: 'anthropic' | 'openai' | 'mock' | 'codex-cli' | null }> {
   if (deps.cfg.modelProviderMode === 'mock') return { available: true, reason: 'test/development mock provider', provider: 'mock' };
+  if (await modelExecution(deps.db, deps.cfg) === 'codex') {
+    const native = await nativeStatus(deps);
+    if (!native.serviceUp) return { available: false, reason: 'سرویس Codex در دسترس نیست.', provider: 'codex-cli' };
+    if (native.cliMode !== 'codex') return { available: false, reason: 'سرویس مدل باید در حالت Codex اجرا شود.', provider: 'codex-cli' };
+    if (!native.loggedIn) return { available: false, reason: 'برای تحلیل هوشمند، در تنظیمات اتصال مدل وارد حساب Codex شوید. API اختیاری است.', provider: 'codex-cli' };
+    return { available: true, reason: '', provider: 'codex-cli' };
+  }
   const c = await deps.creds.active();
-  if (!c) return { available: false, reason: 'اتصال API مدل تنظیم نشده است؛ مدیر باید از «تنظیمات › اتصال Claude» کلید API ثبت کند.', provider: null };
+  if (!c) return { available: false, reason: 'اتصال API مدل تنظیم نشده است؛ مدیر باید از «تنظیمات › اتصال مدل» کلید API ثبت کند.', provider: null };
   if (c.status === 'invalid') return { available: false, reason: 'کلید API ثبت‌شده در آخرین آزمون نامعتبر بود.', provider: null };
   if (!c.settings.model) return { available: false, reason: 'مدل پیش‌فرض انتخاب نشده است.', provider: null };
-  return { available: true, reason: '', provider: 'anthropic' };
+  if (deps.creds.provider === 'openai' && (!c.settings.inputPricePerMillion || !c.settings.outputPricePerMillion)) return { available: false, reason: 'نرخ توکن ورودی و خروجی مدل را برای کنترل سقف هزینه در تنظیمات اتصال وارد کنید.', provider: 'openai' };
+  return { available: true, reason: '', provider: deps.creds.provider };
 }
 
 export async function nativeStatus(deps: Deps): Promise<Record<string, unknown>> {
-  if (!deps.cfg.nativeUrl) return { enabled: false, serviceUp: false, reason: 'پروفایل native فعال نیست (docker compose --profile native).' };
+  if (!deps.cfg.nativeUrl) return { cliMode: deps.cfg.nativeCliMode, enabled: false, serviceUp: false, reason: 'پروفایل native فعال نیست (docker compose --profile native).' };
   try {
     const ctl = AbortSignal.timeout(20000);
     const r = await fetch(`${deps.cfg.nativeUrl}/status`, { headers: { authorization: `Bearer ${deps.internalToken}` }, signal: ctl });
-    if (!r.ok) return { enabled: true, serviceUp: false, reason: `native service responded ${r.status}` };
-    return { enabled: true, serviceUp: true, ...(await r.json()) };
-  } catch { return { enabled: true, serviceUp: false, reason: 'سرویس native در دسترس نیست.' }; }
+    if (!r.ok) return { cliMode: deps.cfg.nativeCliMode, enabled: true, serviceUp: false, reason: `native service responded ${r.status}` };
+    return { cliMode: deps.cfg.nativeCliMode, enabled: true, serviceUp: true, ...(await r.json()) };
+  } catch { return { cliMode: deps.cfg.nativeCliMode, enabled: true, serviceUp: false, reason: 'سرویس native در دسترس نیست.' }; }
 }
 
 export const systemRoutes = (deps: Deps): FastifyPluginAsync => async app => {
@@ -55,6 +63,7 @@ export const systemRoutes = (deps: Deps): FastifyPluginAsync => async app => {
         modelFeatures: avail.available, modelFeaturesReason: avail.reason, provider: avail.provider,
         textSearch: db, manualEditing: db, exportMarkdown: true, exportHtml: true, exportPdf: false, exportDocx: false, ocr: false, semanticSearch: false, webBrowsingInAnswers: false,
       },
+      modelExecution: await modelExecution(deps.db, deps.cfg),
       profile: deps.cfg.profile,
       version: deps.cfg.appVersion,
     };

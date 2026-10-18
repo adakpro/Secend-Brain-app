@@ -20,7 +20,7 @@ async function main() {
     if (i > 120) throw new Error('schema not migrated');
     await new Promise(r => setTimeout(r, 1000));
   }
-  const creds = new CredentialService(db, () => ring, cfg.anthropicBaseUrl);
+  const creds = new CredentialService(db, () => ring, cfg.modelProviderMode === 'openai' ? cfg.openaiBaseUrl : cfg.anthropicBaseUrl, cfg.modelProviderMode === 'openai' ? 'openai' : 'anthropic');
   const runs = new RunService(db);
   const vault = new VaultService(db, cfg.vaultRoot);
   const engine = new ChangeSetEngine(db, vault);
@@ -34,7 +34,7 @@ async function main() {
   await proxy.listen({ host: '0.0.0.0', port: 8790 });
 
   const boss = await createBoss(cfg.databaseUrl, 'worker');
-  const concurrency = Number(process.env.RUN_CONCURRENCY ?? 2);
+  const concurrency = cfg.modelExecution === 'codex' ? 1 : Number(process.env.RUN_CONCURRENCY ?? 2);
 
   await boss.work<{ sourceId: string; analyze?: boolean; userId?: string }>(QUEUES.extract, { localConcurrency: 2 }, async jobs => {
     for (const job of jobs) {

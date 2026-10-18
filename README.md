@@ -7,7 +7,7 @@
 ## پیش‌نیازها
 
 - لینوکس x86-64 با Docker Engine ‏۲۴ به بالا و Docker Compose v2.20+ (آزموده‌شده: Docker 29.0.4، Compose 5.5.1).
-- اینترنت برای build (npm، Docker Hub) و برای اتصال به Anthropic.
+- اینترنت برای build (npm، Docker Hub) و برای اتصال به Anthropic یا OpenAI.
 - حدود ۶ گیگابایت فضای دیسک برای imageها (اندازه‌های واقعی: api ‏545MB، worker ‏519MB، agent-runner ‏796MB، web ‏83MB، native-claude اختیاری 1.16GB). حافظه و CPU در `docs/TEST-REPORT.md` (بخش H06) گزارش شده‌اند؛ عدد تضمینی وجود ندارد.
 - معماری arm64 build/test **نشده** است.
 
@@ -32,10 +32,10 @@ cd second-brain-app
 | `web` | nginx: فایل‌های فرانت + reverse proxy به api (همان origin) | `127.0.0.1:8080` |
 | `api` | منطق محصول، احراز هویت، تنها نویسندهٔ vault | — |
 | `worker` | صف (pg-boss)، استخراج، زمان‌بندی، inference proxy خصوصی | — |
-| `agent-runner` | اجرای Claude Agent SDK با ابزارهای محدود؛ فقط روی شبکهٔ داخلی بدون اینترنت | — |
+| `agent-runner` | اجرای Claude Agent SDK یا عامل OpenAI Responses با ابزارهای محدود؛ فقط روی شبکهٔ داخلی بدون اینترنت | — |
 | `postgres` | PostgreSQL 17 | — |
 | `migrate` | one-shot: migration و schema صف | — |
-| `native-claude` | اختیاری (`--profile native`): باینری رسمی Claude Code | — |
+| `native-claude` | اختیاری (`--profile native`): باینری رسمی Claude Code یا Codex (انتخاب با NATIVE_CLI_MODE) | — |
 
 ## اتصال API مدل (پس از ورود)
 
@@ -48,6 +48,39 @@ cd second-brain-app
 5. «آزمون تولید متن» هزینه‌دار است و فقط با تأیید صریح اجرا می‌شود.
 
 قطع اتصال در برنامه فقط نسخهٔ محلی را پاک می‌کند؛ برای ابطال واقعی، کلید را در Claude Console غیرفعال/حذف کن.
+
+## اتصال OpenAI و Codex
+
+دو مسیر مستقل پشتیبانی می‌شوند: **OpenAI API** برای تحلیل منبع، پاسخ مستند، استودیو، آزمون و زمان‌بندی؛ و **Codex CLI** برای کار مالک در staging. انتخاب ارائه‌دهنده در سطح نصب است؛ تغییر آن کلید ارائه‌دهندهٔ قبلی را حذف نمی‌کند.
+
+برای API، در `.env` مقدار زیر را تنظیم کن و سرویس‌ها را بازسازی کن:
+
+```dotenv
+MODEL_PROVIDER_MODE=openai
+```
+
+```bash
+docker compose up -d --build
+```
+
+سپس **تنظیمات › اتصال‌ها › اتصال API OpenAI / Claude** (`/settings/integrations/model`) را باز کن. کلید را از [OpenAI API Keys](https://platform.openai.com/api-keys) بگیر، ذخیره و اعتبارسنجی کن، مدل را انتخاب کن و نرخ توکن ورودی/خروجی آن را به USD برای یک میلیون توکن از [قیمت رسمی](https://developers.openai.com/api/docs/pricing) وارد کن. نرخ‌ها را با تغییر مدل به‌روز کن. فهرست مدل‌ها فقط دسترسی کلید را نشان می‌دهد؛ مدل باید از Responses API و function calling پشتیبانی کند. «آزمون تولید متن» یک درخواست هزینه‌دار با سقف ۲۵۶ توکن است؛ کامل‌نشدن خروجی موفقیت محسوب نمی‌شود.
+
+کلید OpenAI با همان AES-256-GCM ذخیره می‌شود و فقط API/worker آن را رمزگشایی می‌کنند. runner تنها توکن کوتاه‌عمر هر اجرا را می‌گیرد. درخواست‌ها با `store:false` به [Responses API رسمی](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create) فرستاده می‌شوند. ابزارها همان ابزارهای محدود دانش و پیشنهاد تغییر هستند؛ تأیید انسانی پیش از اعمال حفظ شده است. هزینه بر اساس نرخ‌های واردشده، بدون تخفیف کش، تخمین زده می‌شود؛ پیش از درخواست رزرو محافظه‌کارانه انجام می‌شود. اگر پاسخ شبکه از دست برود، رزرو هزینه حفظ می‌شود. صورتحساب قطعی را در OpenAI بررسی کن.
+
+برای Codex در `.env`:
+
+```dotenv
+NATIVE_CLI_MODE=codex
+CODEX_VERSION=0.162.1
+```
+
+```bash
+docker compose --profile native up -d --build api native-claude
+```
+
+نام سرویس و endpointهای `native-claude` برای سازگاری حفظ شده‌اند؛ در این حالت باینری رسمی `@openai/codex` اجرا می‌شود. در کارت محیط رسمی، «بازکردن محیط رسمی ورود» دستور `codex login --device-auth` را باز می‌کند؛ لینک و کد را خود CLI نمایش می‌دهد. سپس staging را آماده و Codex را باز کن. راهنمای workspace در `AGENTS.md` و مهارت‌ها در `.agents/skills/` قرار می‌گیرند. تغییرات از «آماده‌سازی تغییرات برای بررسی» وارد مرکز بررسی می‌شوند. وظیفه‌های شروع‌شده با کلیک مالک از `codex exec --json` استفاده می‌کنند؛ صف خودکار همچنان به API نیاز دارد. [راهنمای رسمی دستورها](https://developers.openai.com/codex/cli/reference)، [اجرای غیرتعاملی](https://developers.openai.com/codex/noninteractive).
+
+Codex با sandbox `workspace-write`، جست‌وجوی وب غیرفعال و شبکهٔ دستورهای عامل غیرفعال اجرا می‌شود. credential و staging آن volumeهای جدا از Claude دارند؛ credential CLI در پشتیبان عادی نیست. اشتراک ChatGPT یا ورود Codex، اتصال و اعتبار API را فعال نمی‌کند. برای بازگشت به Claude، `NATIVE_CLI_MODE=claude` را تنظیم و سرویس native را بازسازی کن. مسیر قدیمی `/settings/integrations/claude` همچنان کار می‌کند.
 
 ## محیط تعاملی رسمی Claude Code (اختیاری)
 
@@ -131,3 +164,9 @@ migrationها رو به جلو هستند. بازگشت به نسخهٔ قدیم
 ## اسناد
 
 `docs/UPSTREAM-AUDIT.md`، `docs/FEATURE-MAP.md`، `docs/ADR/`، `docs/CLAUDE-AUTH-DECISION.md`، `docs/THREAT-MODEL.md`، `docs/IMPLEMENTATION-STATUS.md`، `docs/TEST-REPORT.md`، `docs/CONTINUATION.md`.
+
+### اجرای تحلیل‌ها با Codex
+
+با `NATIVE_CLI_MODE=codex`، پروفایل `native` و `MODEL_EXECUTION=codex`، تحلیل منابع، پاسخ مستند، تولید متن و آزمون از حساب واردشدهٔ ChatGPT در Codex استفاده می‌کنند و کلید API لازم نیست. مدیر می‌تواند در «تنظیمات › اتصال مدل › مدل اجرای تحلیل‌ها» مسیر Codex یا API را انتخاب کند؛ اتصال API اختیاری است و خودکار جایگزین Codex نمی‌شود.
+
+اجرای خودکار فقط بستهٔ دادهٔ مجاز همان اجرا را به Codex می‌دهد؛ داده‌های `no_external` کنار گذاشته می‌شوند. خروجی ساختاریافته، مسیر پیشنهادها و نقل‌قول‌ها پیش از ثبت اعتبارسنجی می‌شوند و تغییرات ویکی همچنان نیاز به بررسی انسانی دارند. محدودیت مصرف حساب ChatGPT اعمال می‌شود؛ هزینهٔ API برای این اجراها محاسبه نمی‌شود.

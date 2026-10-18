@@ -14,6 +14,7 @@ export interface JobBundle {
   source?: { title: string; chunkKeys: string[]; totalChars: number };
 }
 export interface JobRequest {
+  provider?: 'anthropic' | 'openai' | 'mock';
   jobId: string;
   attemptId: string;
   skillId: string;

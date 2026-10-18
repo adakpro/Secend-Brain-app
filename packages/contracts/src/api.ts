@@ -96,6 +96,8 @@ export const StoreApiKeyBody = z.object({ label: z.string().max(100).default('An
 export const ApiSettingsBody = z.object({
   model: z.string().min(1).max(100).optional(),
   allowedModels: z.array(z.string().max(100)).max(20).optional(),
+  inputPricePerMillion: z.number().positive().max(1000).optional(),
+  outputPricePerMillion: z.number().positive().max(10000).optional(),
   perRunBudgetUsd: z.number().min(0.01).max(50).optional(),
   dailyBudgetUsd: z.number().min(0.01).max(500).optional(),
   timeoutS: z.number().int().min(30).max(3600).optional(),

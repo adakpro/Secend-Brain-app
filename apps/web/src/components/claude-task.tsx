@@ -29,7 +29,7 @@ export function NativeTerminal({ ticket, onClosed }: { ticket: string; onClosed:
     })();
     return () => { disposed = true; ws?.close(); term?.dispose(); };
   }, [ticket]);
-  return <div className="terminal-wrap" ref={el} aria-label="ترمینال خصوصی Claude Code" />;
+  return <div className="terminal-wrap" ref={el} aria-label="ترمینال خصوصی Codex / Claude Code" />;
 }
 
 /** Native (subscription) status, only for admins; other roles never call the admin endpoint. */
@@ -64,16 +64,16 @@ export function ClaudeTaskDialog({ kind, sourceId, question, onClose }: { kind: 
       setTicket(null);
       const r = await api('/admin/native-claude/staging/import', { json: {} });
       if (r.changesetId) { toast(`${num(r.imported)} تغییر برای بررسی آماده شد.`); onClose(); nav(`/review/${r.changesetId}`); return; }
-      toast(r.conflicts?.length ? `تغییری وارد نشد؛ ${num(r.conflicts.length)} تعارض.` : 'Claude تغییری در صفحات ویکی ایجاد نکرد.', r.conflicts?.length ? 'error' : 'ok');
+      toast(r.conflicts?.length ? `تغییری وارد نشد؛ ${num(r.conflicts.length)} تعارض.` : 'عامل تغییری در صفحات ویکی ایجاد نکرد.', r.conflicts?.length ? 'error' : 'ok');
       onClose();
     } catch (e) { setMsg(errText(e)); setPhase('error'); }
   };
   return (
-    <Modal open title={kind === 'ingest' ? 'تحلیل منبع با Claude (اشتراک شما)' : 'پرسش با Claude Code (اشتراک شما)'} onClose={onClose} wide>
-      {phase === 'starting' ? <p className="muted" style={{ fontSize: 12 }}>در حال آماده‌سازی staging و باز کردن Claude Code…</p> : null}
+    <Modal open title={kind === 'ingest' ? 'تحلیل منبع با Codex / Claude (اشتراک شما)' : 'پرسش با Codex / Claude Code (اشتراک شما)'} onClose={onClose} wide>
+      {phase === 'starting' ? <p className="muted" style={{ fontSize: 12 }}>در حال آماده‌سازی staging و باز کردن محیط عامل…</p> : null}
       {phase === 'error' ? <Notice kind="danger">{msg}</Notice> : null}
       {ticket ? <>
-        <Notice icon="info">فرمان <span className="mono">{prefill}</span> در ترمینال تایپ شده ولی ارسال نشده است. آن را بخوان و <b>Enter</b> را بزن. Claude در یک کپی جدا (staging) کار می‌کند{kind === 'ingest' ? '؛ پس از پایان کار، «پایان و ارسال برای بررسی» را بزن تا تفاوت‌ها را ببینی و تأیید کنی' : '؛ پاسخ همین‌جا در ترمینال نمایش داده می‌شود'}.</Notice>
+        <Notice icon="info">فرمان <span className="mono">{prefill}</span> در ترمینال تایپ شده ولی ارسال نشده است. آن را بخوان و <b>Enter</b> را بزن. عامل در یک کپی جدا (staging) کار می‌کند{kind === 'ingest' ? '؛ پس از پایان کار، «پایان و ارسال برای بررسی» را بزن تا تفاوت‌ها را ببینی و تأیید کنی' : '؛ پاسخ همین‌جا در ترمینال نمایش داده می‌شود'}.</Notice>
         <NativeTerminal ticket={ticket} onClosed={why => { setTicket(null); if (phase === 'terminal') setMsg(why); }} />
       </> : null}
       {msg && phase !== 'error' ? <Notice kind="warning">{msg}</Notice> : null}

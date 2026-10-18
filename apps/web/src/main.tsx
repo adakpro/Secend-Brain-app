@@ -63,6 +63,8 @@ const router = createBrowserRouter([
       { path: 'activity', element: L(<ActivityPage />) },
       { path: 'settings', element: L(<SettingsPage />) },
       { path: 'settings/:section', element: L(<SettingsPage />) },
+      { path: 'settings/integrations/model', element: L(<ClaudeIntegrationPage />) },
+      { path: 'settings/integrations/openai', element: L(<ClaudeIntegrationPage />) },
       { path: 'settings/integrations/claude', element: L(<ClaudeIntegrationPage />) },
       { path: 'admin/users', element: L(<UsersPage />) },
       { path: 'admin/integrations/claude', element: <Navigate to="/settings/integrations/claude" replace /> },

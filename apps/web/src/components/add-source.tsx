@@ -79,12 +79,12 @@ export function AddSourceDialog({ initial, onClose }: { initial: Kind; onClose: 
           <Field label="عنوان" id="srcTitle"><input id="srcTitle" className="field" value={title} onChange={e => setTitle(e.target.value)} maxLength={200} dir="auto" /></Field>
           <Field label="برچسب‌ها" id="srcTags" help="با ویرگول جدا کن"><input id="srcTags" className="field" value={tags} onChange={e => setTags(e.target.value)} dir="auto" /></Field>
           <Field label="پروژه (اختیاری)" id="srcProject"><select id="srcProject" className="field" value={projectId} onChange={e => setProjectId(e.target.value)}><option value="">بدون پروژه</option>{(projects.data?.items ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.title}</option>)}</select></Field>
-          <Field label="حساسیت" id="srcSens" help={sensitivity === 'no_external' ? 'این منبع از همهٔ جست‌وجوهای مدل، ابزارها و اجرای بیرونی کنار گذاشته می‌شود.' : 'محل پردازش: سرور همین نصب؛ تحلیل از طریق اتصال API که مدیر تنظیم کرده.'}>
+          <Field label="حساسیت" id="srcSens" help={sensitivity === 'no_external' ? 'این منبع از همهٔ جست‌وجوهای مدل، ابزارها و اجرای بیرونی کنار گذاشته می‌شود.' : 'محل پردازش: سرور همین نصب؛ تحلیل با مدل متصل انجام می‌شود.'}>
             <select id="srcSens" className="field" value={sensitivity} onChange={e => setSensitivity(e.target.value)}><option value="private_model">خصوصی؛ مجاز برای مدل</option><option value="public">عمومی</option><option value="no_external">عدم ارسال بیرونی</option></select>
           </Field>
         </div>
         <label className="check-row" style={{ marginBottom: 6 }}><input type="checkbox" checked={autoAnalyze} disabled={!modelOk || sensitivity === 'no_external'} onChange={e => setAutoAnalyze(e.target.checked)} /><span>پس از استخراج، تحلیل و ساخت پیشنهاد را شروع کن (چیزی بدون تأیید تو اعمال نمی‌شود)</span></label>
-        {!modelOk && status.data ? <Notice kind="warning">اتصال مدل برقرار نیست؛ منبع ذخیره و استخراج می‌شود و جست‌وجوی متنی کار می‌کند، اما تحلیل هوشمند تا اتصال API از پنل مدیر انجام نمی‌شود.</Notice> : null}
+        {!modelOk && status.data ? <Notice kind="warning">منبع ذخیره و استخراج می‌شود؛ برای تحلیل هوشمند وارد حساب Codex شوید. اتصال API اختیاری است.</Notice> : null}
         <div className="dialog-actions"><button type="button" className="btn" onClick={onClose}>انصراف</button><button className="btn primary" disabled={!valid || busy}>{busy ? 'در حال ثبت…' : 'ثبت منبع'}</button></div>
       </form>
     </Modal>
